@@ -1,0 +1,27 @@
+[package]
+name = "rust-mqtt-service"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "mqtt-server"
+path = "src/main.rs"
+
+[[bin]]
+name = "mqtt-client"
+path = "src/client.rs"
+
+[dependencies]
+paho-mqtt = { git = "https://github.com/eclipse/paho.mqtt.rust.git", branch = "master" }
+openssl = { version = "0.10", features = ["vendored"] }
+tokio = { version = "1.17.0", features = ["full"] }
+prost = "0.9"
+tonic = "0.6.2"
+confy = "0.4.0"
+serde = "1.0.136"
+serde_derive = "1.0.136"
+
+[build-dependencies]
+tonic-build = "0.6.2"

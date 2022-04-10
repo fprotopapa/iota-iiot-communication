@@ -1,0 +1,11 @@
+/target
+
+/config/*
+!/config/README.md
+
+/cert/*
+!/cert/README.md
+
+# Ignore MQTT Sessions
+[0-9]*
+

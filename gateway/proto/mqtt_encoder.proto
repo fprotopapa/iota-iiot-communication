@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package encoder;
+
+message Did {
+    string did = 1;
+    // DID challenge to sign
+    string challenge = 2;
+    string vc = 3;
+    bool proof = 4;
+}
+
+// Sensor data
+message Sensor {
+    string sensor_id = 1;
+    string name = 2;
+    string typ = 3;
+    string value = 4;
+    string unit = 5;
+    int64 timestamp = 6;
+}
+
+message Setting {
+    string ip = 1;
+    int64 pk_timestamp = 2;
+    string pk = 3;
+}
+
+// Command
+message Command {
+    string cmd = 1;
+}
+
+// IOTA Streams
+message Streams {
+    string announcement_link = 1;
+    string subscription_link = 2;
+    string keyload_link = 3;
+    string did = 4;
+    string vc = 5;
+}

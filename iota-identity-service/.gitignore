@@ -1,0 +1,7 @@
+/target
+
+/config/*
+!/config/README.md
+
+/stronghold/*
+!/stronghold/README.md

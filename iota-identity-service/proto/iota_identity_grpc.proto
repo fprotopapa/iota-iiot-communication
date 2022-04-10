@@ -1,0 +1,31 @@
+syntax = "proto3";
+package iota_identity_grpc;
+
+service IotaIdentifier {
+  // Iota Identity calls
+  rpc CreateIdentity (IotaIdentityCreationRequest) returns (IotaIdentityReply);
+  rpc VerifyIdentity (IotaIdentityRequest) returns (IotaIdentityReply);
+  rpc ProofIdentity (IotaIdentityRequest) returns (IotaIdentityReply);
+}
+
+message IotaIdentityCreationRequest {
+  // Request message for creating Iota Identity
+  string device_id = 1;
+  string device_name = 2;
+  string device_type = 3;
+}
+
+message IotaIdentityRequest {
+  // Request message for Iota Identity
+  string did = 1;
+  string challenge = 2;
+  string verifiable_credential = 3;
+}
+
+message IotaIdentityReply {
+  // Reply message for Iota Identity
+  string did = 1;
+  string challenge = 2;
+  string verifiable_credential = 3;
+  string status = 4;
+}

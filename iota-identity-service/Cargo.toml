@@ -1,0 +1,26 @@
+[package]
+name = "iota-identity-service"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "iota-identity-server"
+path = "src/main.rs"
+
+[[bin]]
+name = "iota-identity-client"
+path = "src/client.rs"
+
+[dependencies]
+identity = { git = "https://github.com/iotaledger/identity.rs", rev = "4b6c1c7", features = ["account"]} # branch=dev
+tonic = "0.6.2"
+tokio = { version = "1.17.0", features = ["full"] }
+prost = "0.9"
+serde = "1.0.136"
+serde_derive = "1.0.136"
+confy = "0.4.0"
+
+[build-dependencies]
+tonic-build = "0.6.2"

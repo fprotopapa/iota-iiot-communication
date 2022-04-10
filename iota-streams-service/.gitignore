@@ -1,0 +1,6 @@
+/target
+/states/*
+/config/*
+
+!/states/README.md
+!/config/README.md

@@ -1,0 +1,28 @@
+[package]
+name = "iota-streams-service"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "iota-streams-server"
+path = "src/main.rs"
+
+[[bin]]
+name = "iota-streams-client"
+path = "src/client.rs"
+
+[dependencies]
+iota-streams = { git = "https://github.com/iotaledger/streams", rev = "4e3a2c8"} # branch=develop
+tokio = { version = "1.17.0", features = ["full"] }
+iota-client = "1.1.1"
+prost = "0.9"
+rand = "0.8.5"
+tonic = "0.6.2"
+confy = "0.4.0"
+serde = "1.0.136"
+serde_derive = "1.0.136"
+
+[build-dependencies]
+tonic-build = "0.6.2"

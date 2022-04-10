@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package mqtt_grpc;
+
+service MqttOperator {
+    // MQTT calls
+    rpc SendMqttMessage (MqttRequest) returns (MqttReply);
+    rpc ReceiveMqttMessage (MqttRequest) returns (MqttMsgsReply);
+}
+
+message MqttRequest {
+    // Request Message for MQTT Service
+    string topic = 1;
+    bytes message = 2;
+}
+
+message MqttReply {
+    // Reply Message for MQTT Service
+    string status = 1;
+}
+
+message MqttMsgsReply {
+    // Received Messages from MQTT Service
+    repeated string topics = 1;
+    repeated bytes messages = 2;
+    string status = 3;
+}
