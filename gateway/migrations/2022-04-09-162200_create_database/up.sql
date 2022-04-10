@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS config (
 
 CREATE TABLE IF NOT EXISTS sensor_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    description TEXT NOT NULL,
+    description TEXT NOT NULL UNIQUE,
     unit TEXT
 );
 
