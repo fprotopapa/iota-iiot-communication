@@ -4,7 +4,7 @@ use std::env;
 /// ENV for GRPC Socket
 const ENV_GRPC_SOCKET: &str = "STREAMS_GRPC_SOCKET";
 /// Default GRPC Socket
-const DEFAULT_GRPC_SOCKET: &str = "[::1]:50051";
+const DEFAULT_GRPC_SOCKET: &str = "[::1]:50052";
 
 /// Structure used to parse configuration file
 /// Socket needed for GRPC server, for example \[::1]:50051

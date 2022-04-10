@@ -15,7 +15,7 @@ pub const STRONGHOLD_FILE: &str = "identity.hodl";
 /// ENV for GRPC Socket
 const ENV_GRPC_SOCKET: &str = "IDENTITY_GRPC_SOCKET";
 /// Default GRPC Socket
-const DEFAULT_GRPC_SOCKET: &str = "[::1]:50051";
+const DEFAULT_GRPC_SOCKET: &str = "[::1]:50053";
 
 /// ENV for Sign Method Name
 const ENV_IDENTITY_FRAGMENT: &str = "IDENTITY_FRAGMENT";

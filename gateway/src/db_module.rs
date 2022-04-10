@@ -16,6 +16,7 @@ pub fn establish_connection() -> SqliteConnection {
     dotenv().ok();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    info!("DB Connection Established");
     SqliteConnection::establish(&database_url)
         .expect(&format!("Error connecting to {}", database_url))
 }
@@ -107,7 +108,7 @@ pub fn select_thing(conn: &SqliteConnection, th_key: &str) -> Result<models::Thi
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -124,7 +125,7 @@ pub fn select_channel(conn: &SqliteConnection, ch_key: &str) -> Result<models::C
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -143,7 +144,7 @@ pub fn create_thing<'a>(conn: &SqliteConnection, thing_key: &'a str) -> Result<u
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -167,7 +168,7 @@ pub fn create_channel<'a>(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -225,7 +226,7 @@ pub fn select_identification(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -251,7 +252,7 @@ pub fn create_identification<'a>(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -270,7 +271,7 @@ pub fn select_stream(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -301,7 +302,7 @@ pub fn create_stream<'a>(conn: &SqliteConnection, entry: StreamsEntry) -> Result
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -327,11 +328,11 @@ pub fn update_configuration(
     };
     match query {
         Ok(r) => {
-            println!("Affected Rows: {}", r);
+            info!("Affected Rows: {}", r);
             return Ok(r as i32);
         }
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -378,7 +379,7 @@ pub fn create_configuration(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -469,7 +470,7 @@ pub fn select_sensor_type_by_desc(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -489,7 +490,7 @@ pub fn select_sensor_type_by_id(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -513,7 +514,7 @@ pub fn create_sensor_type<'a>(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -542,7 +543,7 @@ pub fn create_sensor<'a>(conn: &SqliteConnection, entry: SensorEntry) -> Result<
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };

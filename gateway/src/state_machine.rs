@@ -45,10 +45,15 @@ pub async fn state_machine() -> Result<(), Box<dyn std::error::Error>> {
 pub async fn init() -> bool {
     let cfg = load_config_file();
     let author_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
+    info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
     let channel_key = env::var(ENV_CHANNEL_KEY).expect("ENV for Channel Key not Found");
+    info!("ENV: {} = {}", ENV_CHANNEL_KEY, &channel_key);
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
+    info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     let device_name = env::var(ENV_DEVICE_NAME).expect("ENV for Device Name not Found");
+    info!("ENV: {} = {}", ENV_DEVICE_NAME, &device_name);
     let device_type = env::var(ENV_DEVICE_TYPE).expect("ENV for Device Type not Found");
+    info!("ENV: {} = {}", ENV_DEVICE_TYPE, &device_type);
     // Connect to Database
     let db_client = db::establish_connection();
     // Connect to MQTT Service
@@ -56,10 +61,11 @@ pub async fn init() -> bool {
     {
         Ok(res) => res,
         Err(e) => {
-            println!("Error Connecting to MQTT-Service: {}", e);
+            error!("Error Connecting to MQTT-Service: {}", e);
             return false;
         }
     };
+    info!("Connected to MQTT Service");
     // Connect to IOTA Streams Service
     let mut stream_client =
         match IotaStreamerClient::connect(format!("http://{}", STREAMS_SOCKET)).await {
@@ -69,6 +75,7 @@ pub async fn init() -> bool {
                 return false;
             }
         };
+    info!("Connected to Streams Service");
     // Connect to Identity Service
     let mut identity_client =
         match IotaIdentifierClient::connect(format!("http://{}", IDENTITY_SOCKET)).await {
@@ -78,38 +85,51 @@ pub async fn init() -> bool {
                 return false;
             }
         };
+    info!("Connected to Identity Service");
     // Create Thing Entry
     match db::create_thing(&db_client, &thing_key) {
-        Ok(_) => println!("Thing Entry Created"),
-        Err(e) => println!("Thing Entry: {}", e),
+        Ok(_) => info!("New Thing Entry Created for Key: {}", &thing_key),
+        Err(_) => error!("Thing Entry Not Created for Key: {}", &thing_key),
     };
     // Get Thing ID
     let thing = match db::select_thing(&db_client, &thing_key) {
-        Ok(res) => res,
-        Err(e) => {
-            println!("Thing Not Found: {}", e);
+        Ok(res) => {
+            info!("Thing Entry Selected");
+            res
+        }
+        Err(_) => {
+            error!("Thing Entry Not Found with Key: {}", &thing_key);
             return false;
         }
     };
     // Create Channel Entry
     match db::create_channel(&db_client, thing.id, &channel_key) {
-        Ok(_) => println!("Channel Entry Created"),
-        Err(e) => println!("Channel Entry: {}", e),
+        Ok(_) => info!("New Channel Entry Created for Key: {}", &channel_key),
+        Err(_) => error!("Channel Entry Not Created for Key: {}", &channel_key),
     };
     // Create Config Entry
     let ip = match public_ip::addr().await {
         Some(res) => {
-            println!("public ip address: {:?}", res);
+            info!("Public IP Address: {:?}", res);
             res.to_string()
         }
         None => {
-            println!("Error Getting IP");
+            error!("Error Getting Public IP");
             return false;
         }
     };
     match db::create_configuration(&db_client, &ip, 0) {
-        Ok(_) => println!("Config Entry Created"),
-        Err(e) => println!("Config Entry: {}", e),
+        Ok(_) => info!("Config Entry Created"),
+        Err(_) => {
+            error!("Config Entry Not Created");
+            match db::update_configuration(&db_client, thing.id, "ip", &ip, 0) {
+                Ok(_) => info!("Config Entry: IP Address Updated: {}", &ip),
+                Err(_) => {
+                    error!("Unable to Update IP Address");
+                    return false;
+                }
+            }
+        }
     };
     let payload = serialize_msg(&enc::Setting {
         ip: ip.clone(),
@@ -117,30 +137,45 @@ pub async fn init() -> bool {
         pk: "".to_string(),
     });
     match send_mqtt_message(&mut mqtt_client, payload, TOPIC_SETTING).await {
-        Ok(_) => (),
+        Ok(_) => info!(
+            "MQTT Message Transmitted to Service for Topic {}",
+            TOPIC_SETTING
+        ),
         Err(e) => {
-            println!("Error Sending MQTT Message: {}", e);
+            error!("Error Sending MQTT Message: {}", e);
             return false;
         }
     };
     // Get Channel ID
     let channel = match db::select_channel(&db_client, &channel_key) {
-        Ok(res) => res,
-        Err(e) => {
-            println!("Channel Not Found: {}", e);
+        Ok(res) => {
+            info!("Channel Entry Selected");
+            res
+        }
+        Err(_) => {
+            error!("Unable to Select Channel with Key: {}", &channel_key);
             return false;
         }
     };
     // Create Entries: SensorType, Sensor
     for sensor in cfg.sensors.list {
         match db::create_sensor_type(&db_client, &sensor.type_descr, &sensor.unit) {
-            Ok(_) => println!("Sensor Type Entry Created"),
-            Err(e) => println!("Sensor Type Entry: {}", e),
+            Ok(_) => info!(
+                "Sensor Type Entry Created for Sensor: {}",
+                &sensor.type_descr
+            ),
+            Err(_) => error!(
+                "Error Creating Sensor Type Entry for : {}",
+                &sensor.type_descr
+            ),
         };
         let sensor_type = match db::select_sensor_type_by_desc(&db_client, &sensor.type_descr) {
-            Ok(res) => res,
-            Err(e) => {
-                println!("Sensor Type Entry: {}", e);
+            Ok(res) => {
+                info!("Sensor Type Entry Selected");
+                res
+            }
+            Err(_) => {
+                error!("Unable to Select Sensor Type Entry: {}", &sensor.type_descr);
                 return false;
             }
         };
@@ -149,22 +184,34 @@ pub async fn init() -> bool {
             db::SensorEntry {
                 channel_id: channel.id,
                 sensor_types_id: sensor_type.id,
-                sensor_id: sensor.sensor_id,
-                sensor_name: sensor.sensor_name,
+                sensor_id: sensor.sensor_id.clone(),
+                sensor_name: sensor.sensor_name.clone(),
             },
         ) {
-            Ok(_) => println!("Sensor Type Entry Created"),
-            Err(e) => println!("Sensor Type Entry: {}", e),
+            Ok(_) => info!(
+                "Sensor Entry Created for ID: {}, Name: {}",
+                &sensor.sensor_id, &sensor.sensor_name
+            ),
+            Err(_) => error!(
+                "Error Creating Sensor Entry for ID: {}, Name: {}",
+                &sensor.sensor_id, &sensor.sensor_name
+            ),
         };
     }
     // Identity
     // Get own DID
     let identity = match db::select_identification(&db_client, thing.id) {
-        Ok(res) => res,
-        Err(e) => {
+        Ok(res) => {
+            info!("Identity Entry with Thing ID {} selected", thing.id);
+            res
+        }
+        Err(_) => {
             // Create new Identity
-            println!("Error Retrieving Thing Identification: {}", e);
-            println!("Create New Identity");
+            error!(
+                "Error Retrieving Thing Identification for Thing ID: {}",
+                thing.id
+            );
+            info!("Creating New Identity with Identity Service");
             let identity = match identity_client
                 .create_identity(IotaIdentityCreationRequest {
                     device_id: author_id.clone(),
@@ -173,9 +220,12 @@ pub async fn init() -> bool {
                 })
                 .await
             {
-                Ok(res) => res.into_inner(),
-                Err(e) => {
-                    println!("Error Creating Identity: {}", e);
+                Ok(res) => {
+                    info!("Identity Entry with Thing ID {} selected", thing.id);
+                    res.into_inner()
+                }
+                Err(_) => {
+                    error!("Error Creating Identity for Thing ID: {}", thing.id);
                     return false;
                 }
             };
@@ -185,9 +235,11 @@ pub async fn init() -> bool {
                 &identity.did,
                 &identity.verifiable_credential,
             ) {
-                Ok(_) => (),
-                Err(e) => {
-                    println!("Error Creating Identity Entry: {}", e);
+                Ok(_) => {
+                    info!("Identity Entry Created for DID: {}", &identity.did);
+                }
+                Err(_) => {
+                    error!("Error Creating Identity Entry for DID: {}", &identity.did);
                     return false;
                 }
             };
@@ -202,26 +254,48 @@ pub async fn init() -> bool {
     // On Start-Up Check if Entries have been made
     // Initialize Streams Connection
     match db::select_stream(&db_client, channel.id) {
-        Ok(res) => println!("{:?}", res),
-        Err(e) => {
+        Ok(res) => info!(
+            "Stream Entry Selected for Channel ID {}:{:?}",
+            channel.id, res
+        ),
+        Err(_) => {
             // Create new Channel
-            println!("Error Selecting Stream Entry: {}", e);
-            println!("Create New Channel");
+            error!(
+                "Error Selecting Stream Entry for Channel ID: {}",
+                channel.id
+            );
+            info!("Create New Channel with Streams Service");
             let author = match stream_client
                 .create_new_author(IotaStreamsRequest {
-                    id: author_id,
+                    id: author_id.clone(),
                     msg_type: 1, // CreateNewAuthor
                     link: "".to_string(),
                 })
                 .await
             {
                 Ok(res) => res.into_inner(),
-                Err(e) => {
-                    println!("Error Creating New Author: {}", e);
+                Err(_) => {
+                    println!("Error Creating New Channel for Author ID: {}", author_id);
                     return false;
                 }
             };
-            println!("Announcement Link: {}", author.link);
+            info!("Announcement Link: {}", &author.link);
+            match db::create_stream(
+                &db_client,
+                db::StreamsEntry {
+                    channel_id: channel.id,
+                    ann_link: author.link.clone(),
+                    sub_link: "".to_string(),
+                    key_link: "".to_string(),
+                    msg_link: "".to_string(),
+                },
+            ) {
+                Ok(_) => info!("Streams Entry Created for Channel ID: {}", channel.id),
+                Err(_) => error!(
+                    "Error Creating Streams Entry for Channel ID: {}",
+                    channel.id
+                ),
+            }
             let payload = serialize_msg(&enc::Streams {
                 announcement_link: author.link,
                 subscription_link: "".to_string(),
@@ -232,16 +306,17 @@ pub async fn init() -> bool {
                     None => "".to_string(),
                 },
             });
+            info!("Sending MQTT Message with Announcement Link to Streams Topic");
             match send_mqtt_message(&mut mqtt_client, payload, TOPIC_STREAM).await {
-                Ok(_) => (),
-                Err(e) => {
-                    println!("Error Sending MQTT Message: {}", e);
+                Ok(_) => info!("Message Transmitted to MQTT Service"),
+                Err(_) => {
+                    error!("Error Sending MQTT Message with Announcement Link");
                     return false;
                 }
             };
         }
     };
-
+    info!("Gateway Successful Initialized");
     true
 }
 

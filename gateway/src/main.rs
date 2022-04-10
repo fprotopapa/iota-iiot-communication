@@ -1,4 +1,6 @@
 #[macro_use]
+extern crate log;
+#[macro_use]
 extern crate diesel;
 extern crate diesel_codegen;
 #[macro_use]
@@ -36,10 +38,14 @@ embed_migrations!();
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
+    info!("Migrate DB");
     init_db();
     let cfg = load_config_file();
     let addr = cfg.grpc.socket.clone();
-    while init().await {}
+    info!("Initialize Gateway");
+    while !init().await {}
+    info!("----------------------------- Start Main Program -----------------------------");
     let (service, rx) = adapter::SensorAdapterService::new(DEFAULT_BUFFER_SIZE);
     let sensor_worker = receive_sensor_data(rx);
     let gateway_worker = state_machine();
@@ -54,7 +60,7 @@ fn init_db() {
     let connection = db::establish_connection();
     let res = embedded_migrations::run(&connection);
     match res {
-        Ok(_) => println!("Migration Successful"),
-        Err(_) => println!("Error Running Migration"),
+        Ok(_) => info!("Migration Successful"),
+        Err(_) => info!("Error Running Migration"),
     }
 }
