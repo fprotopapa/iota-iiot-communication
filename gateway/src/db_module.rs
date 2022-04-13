@@ -33,7 +33,7 @@ pub fn select_sensor(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -52,7 +52,7 @@ pub fn select_sensor_by_name(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -84,14 +84,14 @@ pub fn select_sensor_entry(
             .limit(20)
             .get_results::<models::SensorData>(conn),
         e => {
-            println!("Not found: {}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
     let results = match query {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -206,7 +206,7 @@ pub fn select_identity(conn: &SqliteConnection, digital_id: &str) -> Result<mode
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -355,7 +355,7 @@ pub fn create_identity<'a>(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -407,17 +407,17 @@ pub fn update_stream(
             .set(msg_link.eq(link))
             .execute(conn),
         _ => {
-            println!("Not found: {}", query);
+            error!("{}", query);
             return Err(-1);
         }
     };
     match query {
         Ok(r) => {
-            println!("Affected Rows: {}", r);
+            info!("Affected Rows: {}", r);
             return Ok(r as i32);
         }
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -441,17 +441,17 @@ pub fn update_sensor_entry(
             .set(verified.eq(is_true))
             .execute(conn),
         e => {
-            println!("Not found: {}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
     match query {
         Ok(r) => {
-            println!("Affected Rows: {}", r);
+            info!("Affected Rows: {}", r);
             return Ok(r as i32);
         }
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
@@ -580,7 +580,7 @@ pub fn create_sensor_data<'a>(
     {
         Ok(r) => r,
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };

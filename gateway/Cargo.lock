@@ -486,6 +486,7 @@ dependencies = [
  "log",
  "prost",
  "public-ip",
+ "rand",
  "sensor-grpc-adapter",
  "serde",
  "serde_derive",
