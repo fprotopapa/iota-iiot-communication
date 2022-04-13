@@ -33,11 +33,11 @@ pub async fn receive_mqtt_messages() -> Result<String, String> {
             TOPIC_STREAM => mqtt_streams(payload.to_vec()).await,
             TOPIC_SETTING => mqtt_settings(payload.to_vec()).await,
             TOPIC_COMMAND => mqtt_command(payload.to_vec()).await,
-            e => error!("Topic {} not Found", e),
+            e => Err(format!("Topic {} not Found", e)),
             // Ignore Topics identity & sensors
         };
         match result {
-            Ok(r) => (),
+            Ok(_) => (),
             Err(e) => error!("{}", e),
         }
     }
@@ -71,9 +71,13 @@ pub async fn mqtt_streams(payload: Vec<u8>) -> Result<u32, String> {
     if identity.did.eq(&msg.did) {
         return Err(format!("Received Own Message, DID: {}", &msg.did));
     }
-    // ToDo add new colum unverifiable
+    // Check for Unverifiable Identities
     let msg_identity = get_identity(&db_client, &msg.did)?;
-    if !msg.subscription_link.is_empty() {
+    let unverifiable = match msg_identity.unverifiable {
+        Some(r) => r,
+        None => false,
+    };
+    if !msg.subscription_link.is_empty() && !unverifiable {
         add_subscriber(
             &db_client,
             &mut stream_client,
@@ -119,65 +123,70 @@ pub async fn mqtt_identity(
     // Sign VC with challenge
     if msg.proof && is_thing {
         info!("Proof Gateway Identity");
-        let _response = match identity_client
-            .proof_identity(tonic::Request::new(IotaIdentityRequest {
-                did: msg.did,
-                challenge: msg.challenge,
-                verifiable_credential: msg.vc,
-            }))
-            .await
-        {
-            Ok(res) => {
-                // Send Signed VC over MQTT with flag proof
-                let response = res.into_inner();
-                let payload = serialize_msg(&enc::Did {
-                    did: response.did,
-                    challenge: response.challenge,
-                    vc: response.verifiable_credential,
-                    proof: false,
-                });
-                info!("Send Signed VC over MQTT");
-                let _res = send_mqtt_message(mqtt_client, payload, TOPIC_DID).await;
-            }
-            Err(e) => return Err(format!("Unable to Sign VC: {}", e)),
-        };
+        proof_identity(&mut identity_client, mqtt_client, msg).await?;
     // Thing should verify received DID
     } else if !msg.proof && !is_thing {
-        let _response = match identity_client
-            .verify_identity(tonic::Request::new(IotaIdentityRequest {
-                did: msg.did,
-                challenge: msg.challenge,
-                verifiable_credential: msg.vc,
-            }))
-            .await
-        {
-            Ok(res) => {
-                let response = res.into_inner();
-                // Check if Verification was a success, GRPC Call returns Status = "Verified"
-                if response.status.eq("Verified") {
-                    // Save Answer to DB
-                    // Check if Entry Exists
-                    match db::select_identity(&db_client, &response.did) {
-                        Ok(response) => {
-                            match db::update_identity(&db_client, &response.did, true) {
-                                Ok(_) => return Ok(0),
-                                Err(e) => return Err(format!("Error Updating Identity: {}", e)),
-                            };
-                        }
-                        Err(_) => {
-                            match db::create_identity(&db_client, &response.did, true) {
-                                Ok(_) => return Ok(0),
-                                Err(e) => {
-                                    return Err(format!("Error Creating Verified Identity: {}", e))
-                                }
-                            };
-                        }
-                    };
-                }
-            }
-            Err(e) => return Err(format!("Decoding Error: {}", e)),
-        };
+        info!("Verify Participant's Identity");
+        verify_identity(&mut identity_client, &db_client, msg).await?;
     }
+    Ok(0)
+}
+
+async fn verify_identity(
+    identity_client: &mut IotaIdentifierClient<tonic::transport::Channel>,
+    db_client: &diesel::SqliteConnection,
+    identity: enc::Did,
+) -> Result<u32, String> {
+    let _response = match identity_client
+        .verify_identity(tonic::Request::new(IotaIdentityRequest {
+            did: identity.did,
+            challenge: identity.challenge,
+            verifiable_credential: identity.vc,
+        }))
+        .await
+    {
+        Ok(res) => {
+            let response = res.into_inner();
+            // Check if Verification was a success, GRPC Call returns Status = "Verified"
+            if response.status.eq("Verified") {
+                // Save Answer to DB
+                match get_identity(&db_client, &response.did) {
+                    Ok(r) => {
+                        match db::update_identity(&db_client, &response.did, true) {
+                            Ok(_) => {
+                                info!("Updated Indentity to Verified with DID: {}", &response.did);
+                                return Ok(0);
+                            }
+                            Err(_) => {
+                                return Err(format!(
+                                    "Unable to Update Identity with DID: {}",
+                                    &response.did
+                                ))
+                            }
+                        };
+                    }
+                    Err(_) => {
+                        match db::create_identity(&db_client, &response.did, true) {
+                            Ok(_) => {
+                                info!("Created Verified Indentity with DID: {}", &response.did);
+                                return Ok(0);
+                            }
+                            Err(_) => {
+                                return Err(format!(
+                                    "Unable to Create Verified Identity with DID: {}",
+                                    &response.did
+                                ))
+                            }
+                        };
+                    }
+                };
+            } else {
+                // ToDo
+                // Not Verified, make Identity Unverifiable
+            }
+        }
+        Err(e) => return Err(format!("Unable to Verify Identity: {}", e)),
+    };
     Ok(0)
 }
 
@@ -266,6 +275,36 @@ async fn add_subscriber(
         }
         Err(e) => return Err(format!("Error Adding Subscriber: {}", e)),
     };
+}
+
+async fn proof_identity(
+    identity_client: &mut IotaIdentifierClient<tonic::transport::Channel>,
+    mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
+    identity: enc::Did,
+) -> Result<(), String> {
+    match identity_client
+        .proof_identity(tonic::Request::new(IotaIdentityRequest {
+            did: identity.did,
+            challenge: identity.challenge,
+            verifiable_credential: identity.vc,
+        }))
+        .await
+    {
+        Ok(res) => {
+            // Send Signed VC over MQTT with flag proof
+            let response = res.into_inner();
+            let payload = serialize_msg(&enc::Did {
+                did: response.did,
+                challenge: response.challenge,
+                vc: response.verifiable_credential,
+                proof: false,
+            });
+            info!("Send Signed VC over MQTT");
+            helper_send_mqtt(mqtt_client, payload, TOPIC_DID).await?;
+        }
+        Err(e) => return Err(format!("Unable to Sign VC: {}", e)),
+    };
+    Ok(())
 }
 
 async fn connect_mqtt() -> Result<MqttOperatorClient<tonic::transport::Channel>, String> {

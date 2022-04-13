@@ -28,6 +28,7 @@ table! {
         id -> Integer,
         did -> Text,
         verified -> Nullable<Bool>,
+        unverifiable -> Nullable<Bool>,
     }
 }
 

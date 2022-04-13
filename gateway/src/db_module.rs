@@ -347,6 +347,7 @@ pub fn create_identity<'a>(
     let new_entry = models::NewIdentity {
         did: did,
         verified: verified,
+        unverifiable: false,
     };
 
     let entry = match diesel::insert_into(identities::table)
