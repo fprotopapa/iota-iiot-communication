@@ -1,6 +1,13 @@
 use confy;
 use serde_derive::{Deserialize, Serialize};
 use std::env;
+// MQTT Topics
+pub const TOPIC_DID: &str = "did";
+pub const TOPIC_SENSOR_VALUE: &str = "sensors";
+pub const TOPIC_SETTING: &str = "settings";
+pub const TOPIC_IDENTITY: &str = "identity";
+pub const TOPIC_STREAM: &str = "stream";
+pub const TOPIC_COMMAND: &str = "command";
 // Gateway
 //
 pub const MQTT_SOCKET: &str = "[::1]:50054";

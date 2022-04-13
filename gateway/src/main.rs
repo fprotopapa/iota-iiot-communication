@@ -8,10 +8,14 @@ extern crate diesel_migrations;
 extern crate dotenv;
 
 mod config;
+mod connected_sensors;
 mod db_module;
 mod models;
+mod prolog;
+mod recv_mqtt;
 mod schema;
 mod state_machine;
+mod util;
 
 use db_module as db;
 use sensor_grpc_adapter as adapter;
@@ -31,8 +35,9 @@ pub mod grpc_mqtt {
 }
 
 use config::{load_config_file, DEFAULT_BUFFER_SIZE};
-use state_machine::{init, receive_sensor_data, state_machine};
-
+use connected_sensors::receive_sensor_data;
+use prolog::init;
+use state_machine::state_machine;
 // Embed SQL in Binary
 embed_migrations!();
 
@@ -44,7 +49,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = load_config_file();
     let addr = cfg.grpc.socket.clone();
     info!("Initialize Gateway");
-    while !init().await {}
+    while !(match init().await {
+        Ok(r) => r,
+        Err(e) => e,
+    }) {}
     info!("----------------------------- Start Main Program -----------------------------");
     let (service, rx) = adapter::SensorAdapterService::new(DEFAULT_BUFFER_SIZE);
     let sensor_worker = receive_sensor_data(rx);

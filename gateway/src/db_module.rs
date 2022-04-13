@@ -187,11 +187,11 @@ pub fn update_identity(
         .execute(conn)
     {
         Ok(r) => {
-            println!("Affected Rows: {}", r);
+            info!("Affected Rows: {}", r);
             return Ok(r as i32);
         }
         Err(e) => {
-            println!("{}", e);
+            error!("{}", e);
             return Err(-1);
         }
     };
