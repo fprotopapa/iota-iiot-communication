@@ -13,6 +13,7 @@ mod db_module;
 mod models;
 mod prolog;
 mod recv_mqtt;
+mod req_verification;
 mod schema;
 mod send_mqtt;
 mod state_machine;

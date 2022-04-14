@@ -234,6 +234,25 @@ pub fn select_identity(conn: &SqliteConnection, digital_id: &str) -> Result<mode
     };
     Ok(entry)
 }
+/// Select Sensor Entry
+pub fn select_identities(
+    conn: &SqliteConnection,
+    is_verified: bool,
+) -> Result<Vec<models::Identity>, i32> {
+    use self::identities::dsl::*;
+    let results = match identities
+        .filter(verified.eq(is_verified))
+        .limit(10)
+        .get_results::<models::Identity>(conn)
+    {
+        Ok(r) => r,
+        Err(e) => {
+            error!("{}", e);
+            return Err(-1);
+        }
+    };
+    Ok(results)
+}
 /// Select Identification
 pub fn select_identification(
     conn: &SqliteConnection,

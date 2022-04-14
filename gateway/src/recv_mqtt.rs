@@ -139,7 +139,7 @@ async fn verify_identity(
     db_client: &diesel::SqliteConnection,
     identity: enc::Did,
 ) -> Result<u32, String> {
-    let _response = match identity_client
+    let response = match identity_client
         .verify_identity(tonic::Request::new(IotaIdentityRequest {
             did: identity.did,
             challenge: identity.challenge,
@@ -149,60 +149,28 @@ async fn verify_identity(
     {
         Ok(res) => {
             let response = res.into_inner();
-            // Check if Verification was a success, GRPC Call returns Status = "Verified"
-            if response.status.eq("Verified") {
-                // Save Answer to DB
-                match get_identity(&db_client, &response.did) {
-                    Ok(_) => {
-                        match db::update_identity(&db_client, &response.did, true) {
-                            Ok(_) => {
-                                info!("Updated Indentity to Verified with DID: {}", &response.did);
-                                return Ok(0);
-                            }
-                            Err(_) => {
-                                return Err(format!(
-                                    "Unable to Update Identity with DID: {}",
-                                    &response.did
-                                ))
-                            }
-                        };
-                    }
-                    Err(_) => {
-                        match db::create_identity(&db_client, &response.did, true) {
-                            Ok(_) => {
-                                info!("Created Verified Indentity with DID: {}", &response.did);
-                                return Ok(0);
-                            }
-                            Err(_) => {
-                                return Err(format!(
-                                    "Unable to Create Verified Identity with DID: {}",
-                                    &response.did
-                                ))
-                            }
-                        };
-                    }
-                };
-            } else {
-                // Not Verified, make Identity Unverifiable
-                match db::update_identity_to_unverifiable(&db_client, &response.did, true) {
-                    Ok(_) => {
-                        info!(
-                            "Identity Marked as Unverifiable with DID: {}",
-                            &response.did
-                        );
-                        return Ok(0);
-                    }
-                    Err(_) => {
-                        return Err(format!(
-                            "Unable to Make Identity Unverifiable with DID: {}",
-                            &response.did
-                        ))
-                    }
-                };
-            }
+            response
         }
         Err(e) => return Err(format!("Unable to Verify Identity: {}", e)),
     };
+    // Check if Verification was a success, GRPC Call returns Status = "Verified"
+    if response.status.eq("Verified") {
+        // Save Answer to DB
+        match get_identity(&db_client, &response.did) {
+            Ok(_) => {
+                update_identity(&db_client, &response.did, true)?;
+            }
+            Err(_) => {
+                make_identity(&db_client, &response.did)?;
+                update_identity(&db_client, &response.did, true)?;
+            }
+        };
+    } else {
+        // Not Verified, make Identity Unverifiable
+        // ToDo Remove From Streams
+        update_identity_unverifiable(&db_client, &response.did)?;
+    }
+    return Ok(0);
 }
 
 pub async fn mqtt_settings(payload: Vec<u8>) -> Result<u32, String> {
@@ -320,6 +288,38 @@ async fn proof_identity(
         Err(e) => return Err(format!("Unable to Sign VC: {}", e)),
     };
     Ok(())
+}
+
+fn update_identity(
+    db_client: &diesel::SqliteConnection,
+    did: &str,
+    is_verified: bool,
+) -> Result<u32, String> {
+    match db::update_identity(db_client, did, is_verified) {
+        Ok(_) => {
+            info!("Updated Indentity to Verified with DID: {}", did);
+            return Ok(0);
+        }
+        Err(_) => return Err(format!("Unable to Update Identity with DID: {}", did)),
+    };
+}
+
+fn update_identity_unverifiable(
+    db_client: &diesel::SqliteConnection,
+    did: &str,
+) -> Result<u32, String> {
+    match db::update_identity_to_unverifiable(db_client, did, true) {
+        Ok(_) => {
+            info!("Identity Marked as Unverifiable with DID: {}", did);
+            return Ok(0);
+        }
+        Err(_) => {
+            return Err(format!(
+                "Unable to Make Identity Unverifiable with DID: {}",
+                did
+            ))
+        }
+    };
 }
 
 async fn receive_messages(

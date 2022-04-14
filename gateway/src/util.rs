@@ -1,10 +1,7 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
-use crate::config::{
-    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET,
-    TOPIC_COMMAND, TOPIC_DID, TOPIC_SETTING, TOPIC_STREAM,
-};
+use crate::config::{IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET};
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
 use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
@@ -131,7 +128,7 @@ pub fn get_identification(
     db_client: &diesel::SqliteConnection,
     thing_id: i32,
 ) -> Result<Identification, String> {
-    let identity = match db::select_identification(&db_client, thing_id) {
+    match db::select_identification(&db_client, thing_id) {
         Ok(res) => {
             info!("Selected Identity for Thing ID: {}", thing_id);
             return Ok(res);
