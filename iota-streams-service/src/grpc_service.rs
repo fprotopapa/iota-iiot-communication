@@ -27,6 +27,7 @@ pub struct ChannelRequest {
     pub link: String,
     pub tx: oneshot::Sender<QueueElem>,
     pub messages: Option<Vec<String>>,
+    pub pk: Option<Vec<u8>>,
 }
 /// Reply Message, from State Machine to Server
 #[derive(Debug)]
@@ -36,6 +37,7 @@ pub struct ChannelReply {
     pub status: String,
     pub link: String,
     pub messages: Option<Vec<String>>,
+    pub pk: Option<Vec<u8>>,
 }
 /// Structure for Implementing GRPC Calls,
 /// tx: Stable MPSC Communication channel
@@ -51,14 +53,14 @@ impl IotaStreamsService {
 }
 /// Implementation of GRPC Calls
 /// create_new_author, create_new_subscriber, add_subscriber,
-/// receive_keyload, send_message, receive_messages
+/// receive_keyload, send_message, receive_messages, revoke_access
 #[tonic::async_trait]
 impl IotaStreamer for IotaStreamsService {
     async fn create_new_author(
         &self,
         request: Request<IotaStreamsRequest>,
     ) -> Result<Response<IotaStreamsReply>, Status> {
-        println!("create_new_author: {:?}", request);
+        info!("create_new_author: {:?}", request);
         match thread_communication(request, self.tx.clone()).await {
             Ok(response) => {
                 return Ok(Response::new(IotaStreamsReply {
@@ -66,9 +68,10 @@ impl IotaStreamer for IotaStreamsService {
                     msg_type: convert_from_msgtype(response.msg_type),
                     link: response.link,
                     status: response.status,
+                    pk: Vec::new(),
                 }))
             }
-            Err(_e) => return Err(Status::cancelled("Author Not Generated")),
+            Err(e) => return Err(Status::cancelled(format!("Author Not Generated: {}", e))),
         };
     }
 
@@ -76,7 +79,7 @@ impl IotaStreamer for IotaStreamsService {
         &self,
         request: Request<IotaStreamsRequest>,
     ) -> Result<Response<IotaStreamsReply>, Status> {
-        println!("create_new_subscriber: {:?}", request);
+        info!("create_new_subscriber: {:?}", request);
         match thread_communication(request, self.tx.clone()).await {
             Ok(response) => {
                 return Ok(Response::new(IotaStreamsReply {
@@ -84,9 +87,18 @@ impl IotaStreamer for IotaStreamsService {
                     msg_type: convert_from_msgtype(response.msg_type),
                     link: response.link,
                     status: response.status,
+                    pk: match response.pk {
+                        Some(r) => r,
+                        None => Vec::new(),
+                    },
                 }))
             }
-            Err(_e) => return Err(Status::cancelled("Subscriber Not Generated")),
+            Err(e) => {
+                return Err(Status::cancelled(format!(
+                    "Subscriber Not Generated: {}",
+                    e
+                )))
+            }
         };
     }
 
@@ -94,7 +106,7 @@ impl IotaStreamer for IotaStreamsService {
         &self,
         request: Request<IotaStreamsRequest>,
     ) -> Result<Response<IotaStreamsReply>, Status> {
-        println!("add_subscriber: {:?}", request);
+        info!("add_subscriber: {:?}", request);
         match thread_communication(request, self.tx.clone()).await {
             Ok(response) => {
                 return Ok(Response::new(IotaStreamsReply {
@@ -102,9 +114,10 @@ impl IotaStreamer for IotaStreamsService {
                     msg_type: convert_from_msgtype(response.msg_type),
                     link: response.link,
                     status: response.status,
+                    pk: Vec::new(),
                 }))
             }
-            Err(_e) => return Err(Status::cancelled("Subscriber Not Added")),
+            Err(e) => return Err(Status::cancelled(format!("Subscriber Not Added: {}", e))),
         };
     }
 
@@ -112,7 +125,7 @@ impl IotaStreamer for IotaStreamsService {
         &self,
         request: Request<IotaStreamsRequest>,
     ) -> Result<Response<IotaStreamsReply>, Status> {
-        println!("receive_keyload: {:?}", request);
+        info!("receive_keyload: {:?}", request);
         match thread_communication(request, self.tx.clone()).await {
             Ok(response) => {
                 return Ok(Response::new(IotaStreamsReply {
@@ -120,9 +133,10 @@ impl IotaStreamer for IotaStreamsService {
                     msg_type: convert_from_msgtype(response.msg_type),
                     link: response.link,
                     status: response.status,
+                    pk: Vec::new(),
                 }))
             }
-            Err(_e) => return Err(Status::cancelled("Keyload Not Received")),
+            Err(e) => return Err(Status::cancelled(format!("Keyload Not Received: {}", e))),
         };
     }
 
@@ -130,24 +144,34 @@ impl IotaStreamer for IotaStreamsService {
         &self,
         request: Request<IotaStreamsSendMessageRequest>,
     ) -> Result<Response<IotaStreamsReply>, Status> {
+        info!("send_message: {:?}", request);
         let (tx_one, rx_one) = oneshot::channel();
         let request = request.into_inner();
         let tx = self.tx.clone();
-        let _res = tx
+        match tx
             .send(QueueElem::Request(ChannelRequest {
                 id: request.id,
                 msg_type: convert_to_msgtype(request.msg_type),
                 link: request.message_link,
                 tx: tx_one,
                 messages: Some(vec![request.message]),
+                pk: Some(Vec::new()),
             }))
-            .await;
+            .await
+        {
+            Ok(_) => (),
+            Err(e) => return Err(Status::cancelled(format!("Keyload Not Received: {}", e))),
+        };
         let response = match rx_one.await {
             Ok(resp) => match resp {
                 QueueElem::Reply(resp) => resp,
-                _ => return Err(Status::cancelled("Keyload Not Received")),
+                _ => {
+                    return Err(Status::cancelled(
+                        "Keyload Not Received: Wrong Data Structure Returned",
+                    ))
+                }
             },
-            Err(_) => return Err(Status::cancelled("Keyload Not Received")),
+            Err(e) => return Err(Status::cancelled(format!("Keyload Not Received: {}", e))),
         };
 
         return Ok(Response::new(IotaStreamsReply {
@@ -155,6 +179,7 @@ impl IotaStreamer for IotaStreamsService {
             msg_type: convert_from_msgtype(response.msg_type),
             link: response.link,
             status: response.status,
+            pk: Vec::new(),
         }));
     }
 
@@ -162,24 +187,44 @@ impl IotaStreamer for IotaStreamsService {
         &self,
         request: Request<IotaStreamsRequest>,
     ) -> Result<Response<IotaStreamsRecvMessagesReply>, Status> {
+        info!("receive_messages: {:?}", request);
         let (tx_one, rx_one) = oneshot::channel();
         let request = request.into_inner();
         let tx = self.tx.clone();
-        let _res = tx
+        match tx
             .send(QueueElem::Request(ChannelRequest {
                 id: request.id,
                 msg_type: convert_to_msgtype(request.msg_type),
                 link: request.link,
                 tx: tx_one,
                 messages: None,
+                pk: None,
             }))
-            .await;
+            .await
+        {
+            Ok(_) => (),
+            Err(e) => {
+                return Err(Status::cancelled(format!(
+                    "Error Receiving Messsages: {}",
+                    e
+                )))
+            }
+        };
         let response = match rx_one.await {
             Ok(resp) => match resp {
                 QueueElem::Reply(resp) => resp,
-                _ => return Err(Status::cancelled("Error Receiving Messsages")),
+                _ => {
+                    return Err(Status::cancelled(
+                        "Error Receiving Messsages: Wrong Data Structure Returned",
+                    ))
+                }
             },
-            Err(_) => return Err(Status::cancelled("Error Receiving Messsages")),
+            Err(e) => {
+                return Err(Status::cancelled(format!(
+                    "Error Receiving Messsages: {}",
+                    e
+                )))
+            }
         };
         let messages = match response.messages {
             Some(msgs) => msgs,
@@ -194,30 +239,52 @@ impl IotaStreamer for IotaStreamsService {
             messages: messages,
         }));
     }
+
+    async fn revoke_access(
+        &self,
+        request: Request<IotaStreamsRequest>,
+    ) -> Result<Response<IotaStreamsReply>, Status> {
+        info!("revoke_access: {:?}", request);
+        match thread_communication(request, self.tx.clone()).await {
+            Ok(response) => {
+                return Ok(Response::new(IotaStreamsReply {
+                    id: response.id,
+                    msg_type: convert_from_msgtype(response.msg_type),
+                    link: response.link,
+                    status: response.status,
+                    pk: Vec::new(),
+                }))
+            }
+            Err(e) => return Err(Status::cancelled(format!("Access Not Removed: {}", e))),
+        };
+    }
 }
 /// Basic routine to poplate and distribute Request and Response
 async fn thread_communication(
     request: Request<IotaStreamsRequest>,
     tx: mpsc::Sender<QueueElem>,
-) -> Result<ChannelReply, ()> {
+) -> Result<ChannelReply, String> {
     let (tx_one, rx_one) = oneshot::channel();
     let request = request.into_inner();
-    let _res = tx
+    match tx
         .send(QueueElem::Request(ChannelRequest {
             id: request.id,
             msg_type: convert_to_msgtype(request.msg_type),
             link: request.link,
             tx: tx_one,
             messages: None,
+            pk: Some(request.pk),
         }))
-        .await;
-
-    let response = match rx_one.await {
-        Ok(resp) => match resp {
-            QueueElem::Reply(resp) => resp,
-            _ => return Err(()),
-        },
-        Err(_) => return Err(()),
+        .await
+    {
+        Ok(_) => (),
+        Err(e) => return Err(e.to_string()),
     };
-    Ok(response)
+    match rx_one.await {
+        Ok(resp) => match resp {
+            QueueElem::Reply(resp) => return Ok(resp),
+            _ => return Err("Wrong Data Structure Returned".to_string()),
+        },
+        Err(e) => return Err(e.to_string()),
+    };
 }

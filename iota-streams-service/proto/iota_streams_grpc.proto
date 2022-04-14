@@ -9,6 +9,7 @@ service IotaStreamer {
   rpc ReceiveKeyload (IotaStreamsRequest) returns (IotaStreamsReply);
   rpc SendMessage (IotaStreamsSendMessageRequest) returns (IotaStreamsReply);
   rpc ReceiveMessages (IotaStreamsRequest) returns (IotaStreamsRecvMessagesReply);
+  rpc RevokeAccess (IotaStreamsRequest) returns (IotaStreamsReply);
 }
 //  Message type 
 //  -----------------------
@@ -18,12 +19,14 @@ service IotaStreamer {
 //  ReceiveKeyload:       4
 //  SendMessage:          5
 //  ReceiveMessages:      6
+//  RevokeAccess:         7
 //  -----------------------
 message IotaStreamsRequest {
   // Request message for Iota Streams
   string id = 1;
   uint32 msg_type = 2;
   string link = 3;
+  bytes pk = 4;
 }
 
 message IotaStreamsSendMessageRequest {
@@ -41,6 +44,7 @@ message IotaStreamsReply {
   uint32 msg_type = 2;
   string status = 3;
   string link = 4;
+  bytes pk = 5;
 }
 
 message IotaStreamsRecvMessagesReply {

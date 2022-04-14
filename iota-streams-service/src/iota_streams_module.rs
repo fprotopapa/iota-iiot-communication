@@ -1,15 +1,3 @@
-/// ENV name for Node URL for Tangle communication: STREAMS_NODE_URL
-pub const ENV_NODE_URL: &str = "STREAMS_NODE_URL";
-/// ENV name for local Proof of work setting: STREAMS_LOCAL_POW (default: false)
-pub const ENV_LOCAL_POW: &str = "STREAMS_LOCAL_POW";
-/// ENV name to set password for exporting author and subscriber state
-pub const ENV_STATE_PWD: &str = "STREAMS_STATE_PWD";
-/// Default valuefor node URL and password
-pub const DEFAULT_NODE_URL: &str = "https://chrysalis-nodes.iota.org";
-/// Default value for password to export states
-pub const DEFAULT_STATE_PWD: &str = "123456";
-/// Default value for folder name for saving exported states
-pub const EXPORT_STATE_PATH: &str = "states";
 /// streams_author contains helper functions simplifying the use of
 /// the IOTA Streams library for the Author instance. Communication via Public and Private Single Branch.
 ///
@@ -37,53 +25,60 @@ pub mod streams_author {
         app::transport::tangle::{client::Client, TangleAddress},
         app_channels::api::tangle::{Address, Author, Bytes, ChannelType},
         app_channels::Tangle,
+        core_edsig::signature::ed25519::PublicKey,
     };
     use tokio::time::{sleep, Duration};
 
-    pub async fn create_new_author(id: &str) -> String {
-        let client = make_client().await;
-        let cli = client.clone();
-        println!("Make announcement");
-        let mut author = make_author(cli);
+    pub async fn create_new_author(id: &str) -> Result<String, String> {
+        let client = make_client().await?;
+        info!("Create New Channel Through Announcement");
+        let mut author = make_author(client);
         let ann_link = make_announcement(&mut author).await;
-        match export_state(&mut author, id).await {
-            Ok(_r) => return ann_link.to_string(),
-            Err(_e) => return "".to_string(),
-        };
+        export_state(&mut author, id).await?;
+        Ok(ann_link.to_string())
     }
 
-    pub async fn add_subscriber(id: &str, subscription_link: &str) -> String {
-        let mut author = match import_state(id).await {
-            Ok(aut) => aut,
-            Err(_e) => return "".to_string(),
-        };
-        println!("Add subscriber");
-        let sub_link = match parse_address(subscription_link) {
-            Ok(address) => address,
-            Err(e) => return e.to_string(),
-        };
+    pub async fn add_subscriber(id: &str, subscription_link: &str) -> Result<String, String> {
+        let mut author = import_state(id).await?;
+        let sub_link = parse_address(subscription_link)?;
+        info!(
+            "Add Subscriber with Subscription Link: {}",
+            subscription_link
+        );
         receive_subscription(&mut author, &sub_link).await;
         let announcement_link = match author.announcement_link().clone() {
             Some(address) => address,
-            None => return "".to_string(),
+            None => return Err("No Announcement Link Found".to_string()),
         };
         let (keyload_link, _) = make_keyload(&mut author, &announcement_link).await;
-        match export_state(&mut author, id).await {
-            Ok(_r) => return keyload_link.to_string(),
-            Err(_e) => return "".to_string(),
+        export_state(&mut author, id).await?;
+        Ok(keyload_link.to_string())
+    }
+
+    pub async fn remove_access(id: &str, pk: &Vec<u8>) -> Result<String, String> {
+        let mut author = import_state(id).await?;
+        let public_key = match PublicKey::from_bytes(pk) {
+            Ok(res) => res,
+            Err(e) => return Err(format!("Unable to Convert String to Public Key: {}", e)),
+        };
+        // info!("Public Key to Remove: {:?}", public_key);
+        match author.remove_subscriber(public_key) {
+            Ok(_) => {
+                info!("Successfully Removed Subscriber");
+                export_state(&mut author, id).await?;
+                return Ok("Successfully Removed Subscriber".to_string());
+            }
+            Err(e) => {
+                error!("Unable to Remove Subscriber: {}", e);
+                return Err(format!("Unable to Remove Subscriber: {}", e));
+            }
         };
     }
 
-    pub async fn send_message(id: &str, msg_link: &str, message: &str) -> String {
-        let mut author = match import_state(id).await {
-            Ok(aut) => aut,
-            Err(_e) => return "".to_string(),
-        };
-        let msg_link = match parse_address(msg_link) {
-            Ok(address) => address,
-            Err(e) => return e.to_string(),
-        };
-        println!("Send message: {}", message);
+    pub async fn send_message(id: &str, msg_link: &str, message: &str) -> Result<String, String> {
+        let mut author = import_state(id).await?;
+        let msg_link = parse_address(msg_link)?;
+        info!("Send message: {}", message);
         let (msg_link, _seq_link) = match author
             .send_signed_packet(
                 &msg_link,
@@ -92,18 +87,18 @@ pub mod streams_author {
             )
             .await
         {
-            Ok(send) => send,
-            Err(_e) => return "Error: Sending Message".to_string(),
+            Ok(send) => {
+                info!(
+                    "Sent msg: {}, tangle index: {:#}",
+                    msg_link,
+                    msg_link.to_msg_index()
+                );
+                send
+            }
+            Err(e) => return Err(format!("Error: Sending Message: {}", e)),
         };
-        println!(
-            "Sent msg: {}, tangle index: {:#}",
-            msg_link,
-            msg_link.to_msg_index()
-        );
-        match export_state(&mut author, id).await {
-            Ok(_r) => return msg_link.to_string(),
-            Err(_e) => return msg_link.to_string(),
-        };
+        export_state(&mut author, id).await?;
+        Ok(msg_link.to_string())
     }
 
     pub fn make_author(client: Client) -> Author<Tangle> {
@@ -114,18 +109,17 @@ pub mod streams_author {
 
     pub async fn make_announcement(author: &mut Author<Tangle>) -> Address {
         loop {
-            let announcement_link = author.send_announce().await;
-            match announcement_link {
+            match author.send_announce().await {
                 Ok(link) => {
-                    println!("Announcement Link: {}", &link.to_string());
+                    info!("Announcement Link: {}", &link.to_string());
                     return link;
                 }
                 Err(e) => {
-                    println!("{}", e);
+                    error!("{}", e);
                     sleep(Duration::from_millis(10000)).await;
                     continue;
                 }
-            }
+            };
         }
     }
 
@@ -134,78 +128,68 @@ pub mod streams_author {
         announcement_link: &Address,
     ) -> (TangleAddress, Option<TangleAddress>) {
         loop {
-            let res = author.send_keyload_for_everyone(announcement_link).await;
-            match res {
+            match author.send_keyload_for_everyone(announcement_link).await {
                 Ok(link) => {
-                    println!("Keyload Link: {}", &link.0.to_string());
+                    info!("Keyload Link: {}", &link.0.to_string());
                     return link;
                 }
                 Err(e) => {
-                    println!("{}", e);
+                    error!("{}", e);
                     sleep(Duration::from_millis(10000)).await;
                     continue;
                 }
-            }
+            };
         }
     }
 
     pub async fn receive_subscription(author: &mut Author<Tangle>, subscription_link: &Address) {
         loop {
-            let res = author.receive_subscribe(subscription_link).await;
-            match res {
-                Ok(_r) => return (),
+            match author.receive_subscribe(subscription_link).await {
+                Ok(_) => {
+                    info!("Author Received Subscription");
+                    return ();
+                }
                 Err(e) => {
-                    println!("{}", e);
+                    error!("{}", e);
                     sleep(Duration::from_millis(10000)).await;
                     continue;
                 }
-            }
+            };
         }
     }
 
-    pub async fn export_state(caller: &mut Author<Tangle>, id: &str) -> Result<(), ()> {
+    pub async fn export_state(caller: &mut Author<Tangle>, id: &str) -> Result<(), String> {
         let password = get_state_password();
         let path = get_state_path(id);
-        let state = caller.export(&password).await;
-        match state {
+        match caller.export(&password).await {
             Ok(state) => {
-                let res = std::fs::write(path, state);
-                match res {
-                    Ok(_r) => return Ok(()),
-                    Err(e) => {
-                        println!("{}", e);
-                        return Err(());
+                match std::fs::write(path, state) {
+                    Ok(_) => {
+                        info!("State Successfully Exported");
+                        return Ok(());
                     }
-                }
+                    Err(e) => return Err(format!("Unable To Write State: {}", e)),
+                };
             }
-            Err(e) => {
-                println!("{}", e);
-                return Err(());
-            }
-        }
+            Err(e) => return Err(format!("Unable To Export State: {}", e)),
+        };
     }
 
-    pub async fn import_state(id: &str) -> Result<Author<Tangle>, ()> {
+    pub async fn import_state(id: &str) -> Result<Author<Tangle>, String> {
         let password = get_state_password();
-        let client = make_client().await;
+        let client = make_client().await?;
         let path = get_state_path(id);
-        let binary = std::fs::read(path);
-        match binary {
-            Ok(binary) => {
-                let sub = Author::import(&binary, &password, client.clone()).await;
-                match sub {
-                    Ok(res) => return Ok(res),
-                    Err(e) => {
-                        println!("{}", e);
-                        return Err(());
-                    }
-                }
+        let binary = match std::fs::read(path) {
+            Ok(r) => r,
+            Err(e) => return Err(format!("Unable To Read State: {}", e)),
+        };
+        match Author::import(&binary, &password, client).await {
+            Ok(r) => {
+                info!("State Successfully Imported");
+                return Ok(r);
             }
-            Err(e) => {
-                println!("{}", e);
-                return Err(());
-            }
-        }
+            Err(e) => return Err(format!("Unable To Import State: {}", e)),
+        };
     }
 }
 /// streams_subscriber contains helper functions simplifying the use of
@@ -237,71 +221,57 @@ pub mod streams_subscriber {
         app_channels::Tangle,
     };
     use tokio::time::{sleep, Duration};
-
-    pub async fn create_new_subscriber(id: &str, announcement_link: &str) -> String {
-        let client = make_client().await;
+    // Todo get PK
+    pub async fn create_new_subscriber(
+        id: &str,
+        announcement_link: &str,
+    ) -> Result<(String, Vec<u8>), String> {
+        let client = make_client().await?;
         let mut subscriber = make_subscriber(client);
-        let ann_link = match parse_address(announcement_link) {
-            Ok(address) => address,
-            Err(e) => return e.to_string(),
-        };
+        let pk = subscriber.get_public_key().as_bytes().clone().to_vec();
+        info!("Public Key: {:?}", pk);
+        let ann_link = parse_address(announcement_link)?;
         receive_announcement(&mut subscriber, &ann_link).await;
         let subscription_link = make_subscription(&mut subscriber, &ann_link).await;
-        match export_state(&mut subscriber, id).await {
-            Ok(_r) => return subscription_link.to_string(),
-            Err(_e) => return "".to_string(),
-        };
+        export_state(&mut subscriber, id).await?;
+        Ok((subscription_link.to_string(), pk))
     }
 
-    pub async fn receive_messages(id: &str) -> Vec<String> {
-        let mut subscriber = match import_state(id).await {
-            Ok(sub) => sub,
-            Err(_e) => return vec!["".to_string()],
+    pub async fn receive_messages(id: &str) -> Result<Vec<String>, String> {
+        let mut subscriber = import_state(id).await?;
+        info!("Fetch Next Messages");
+        let wrapped_msgs = match subscriber.fetch_next_msgs().await {
+            Ok(r) => r,
+            Err(e) => return Err(format!("Unable To Fetch Messages: {}", e)),
         };
-        let messages = match subscriber.fetch_next_msgs().await {
-            Ok(wrapped_msgs) => {
-                let mut msgs = Vec::new();
-                for msg in wrapped_msgs {
-                    msgs.push(
-                        msg.body
-                            .masked_payload()
-                            .and_then(Bytes::as_str)
-                            .unwrap_or("None")
-                            .to_string(),
-                    )
-                }
-                msgs
-            }
-            Err(_e) => vec!["".to_string()],
-        };
-        match export_state(&mut subscriber, id).await {
-            Ok(_r) => return messages,
-            Err(_e) => return messages,
-        };
+        let mut msgs = Vec::new();
+        for msg in wrapped_msgs {
+            msgs.push(
+                msg.body
+                    .masked_payload()
+                    .and_then(Bytes::as_str)
+                    .unwrap_or("None")
+                    .to_string(),
+            )
+        }
+        export_state(&mut subscriber, id).await?;
+        Ok(msgs)
     }
 
-    pub async fn receive_keyload(id: &str, keyload_link: &str) -> String {
-        let mut subscriber = match import_state(id).await {
-            Ok(sub) => sub,
-            Err(_e) => return "".to_string(),
+    pub async fn receive_keyload(id: &str, keyload_link: &str) -> Result<String, String> {
+        let mut subscriber = import_state(id).await?;
+        let key_link = parse_address(keyload_link)?;
+        let is_received = match subscriber.receive_keyload(&key_link).await {
+            Ok(r) => r,
+            Err(e) => return Err(format!("Subscriber Unable To Receive Keyload: {}", e)),
         };
-        let key_link = match parse_address(keyload_link) {
-            Ok(address) => address,
-            Err(e) => return e.to_string(),
-        };
-        match subscriber.receive_keyload(&key_link).await {
-            Ok(res) => {
-                if res {
-                    match export_state(&mut subscriber, id).await {
-                        Ok(_r) => return "Keyload processed".to_string(),
-                        Err(_e) => return "".to_string(),
-                    };
-                } else {
-                    return "".to_string();
-                }
-            }
-            Err(_e) => return "".to_string(),
-        };
+        if is_received {
+            info!("Subscriber Received Keyload");
+            export_state(&mut subscriber, id).await?;
+            return Ok("Subscriber Received Keyload".to_string());
+        } else {
+            return Err("Subscriber Unable To Receive Keyload".to_string());
+        }
     }
 
     pub fn make_subscriber(client: Client) -> Subscriber<Tangle> {
@@ -315,15 +285,17 @@ pub mod streams_subscriber {
         announcement_link: &Address,
     ) {
         loop {
-            let res = subscriber.receive_announcement(announcement_link).await;
-            match res {
-                Ok(_r) => return (),
+            match subscriber.receive_announcement(announcement_link).await {
+                Ok(_r) => {
+                    info!("Subscriber Received Announcement Link");
+                    return ();
+                }
                 Err(e) => {
-                    println!("{}", e);
+                    error!("{}", e);
                     sleep(Duration::from_millis(10000)).await;
                     continue;
                 }
-            }
+            };
         }
     }
 
@@ -332,68 +304,58 @@ pub mod streams_subscriber {
         announcement_link: &Address,
     ) -> Address {
         loop {
-            let subscription_link = subscriber.send_subscribe(announcement_link).await;
-            match subscription_link {
-                Ok(link) => return link,
+            match subscriber.send_subscribe(announcement_link).await {
+                Ok(link) => {
+                    info!("Subscription Link: {}", &link.to_string());
+                    return link;
+                }
                 Err(e) => {
-                    println!("{}", e);
+                    error!("{}", e);
                     sleep(Duration::from_millis(10000)).await;
                     continue;
                 }
-            }
+            };
         }
     }
 
-    pub async fn export_state(caller: &mut Subscriber<Tangle>, id: &str) -> Result<(), ()> {
+    pub async fn export_state(caller: &mut Subscriber<Tangle>, id: &str) -> Result<(), String> {
         let password = get_state_password();
         let path = get_state_path(id);
-        let state = caller.export(&password).await;
-        match state {
-            Ok(state) => {
-                let res = std::fs::write(path, state);
-                match res {
-                    Ok(_r) => return Ok(()),
-                    Err(e) => {
-                        println!("{}", e);
-                        return Err(());
-                    }
-                }
+        let state = match caller.export(&password).await {
+            Ok(r) => r,
+            Err(e) => return Err(format!("Unable to Write State: {}", e)),
+        };
+        match std::fs::write(path, state) {
+            Ok(_) => {
+                info!("State Successfully Exported");
+                return Ok(());
             }
-            Err(e) => {
-                println!("{}", e);
-                return Err(());
-            }
+            Err(e) => return Err(format!("Unable to Export State: {}", e)),
         }
     }
 
-    pub async fn import_state(id: &str) -> Result<Subscriber<Tangle>, ()> {
+    pub async fn import_state(id: &str) -> Result<Subscriber<Tangle>, String> {
         let password = get_state_password();
-        let client = make_client().await;
+        let client = make_client().await?;
         let path = get_state_path(id);
-        let binary = std::fs::read(path);
-        match binary {
-            Ok(binary) => {
-                let sub = Subscriber::import(&binary, &password, client.clone()).await;
-                match sub {
-                    Ok(res) => return Ok(res),
-                    Err(e) => {
-                        println!("{}", e);
-                        return Err(());
-                    }
-                }
+        let binary = match std::fs::read(path) {
+            Ok(r) => r,
+            Err(e) => return Err(format!("Unable to Read State: {}", e)),
+        };
+        match Subscriber::import(&binary, &password, client).await {
+            Ok(r) => {
+                info!("State Successfully Imported");
+                return Ok(r);
             }
-            Err(e) => {
-                println!("{}", e);
-                return Err(());
-            }
-        }
+            Err(e) => return Err(format!("Unable to Import State: {}", e)),
+        };
     }
 }
 /// util contains helper functions simplifying the use of
 /// the IOTA Streams library for the Subscriber and Author instance.
 ///
 pub mod util {
-    use crate::iota_streams_module::{
+    use crate::config::{
         DEFAULT_NODE_URL, DEFAULT_STATE_PWD, ENV_LOCAL_POW, ENV_NODE_URL, ENV_STATE_PWD,
         EXPORT_STATE_PATH,
     };
@@ -432,11 +394,11 @@ pub mod util {
     pub fn parse_address(link: &str) -> Result<Address, String> {
         match link.parse::<TangleAddress>() {
             Ok(address) => return Ok(address),
-            Err(_e) => return Err("".to_string()),
+            Err(e) => return Err(format!("Unable To Parse Address From String: {}", e)),
         }
     }
 
-    pub async fn make_client() -> Client {
+    pub async fn make_client() -> Result<Client, String> {
         let node_url = env::var(ENV_NODE_URL).unwrap_or_else(|_| DEFAULT_NODE_URL.to_string());
         let local_pow = match env::var(ENV_LOCAL_POW)
             .unwrap_or_else(|_| "false".to_string())
@@ -454,11 +416,14 @@ pub mod util {
             .finish()
             .await
         {
-            Ok(r) => r,
-            Err(_e) => panic!("Client build error."),
+            Ok(r) => {
+                info!("Streams Client Created");
+                r
+            }
+            Err(e) => return Err(format!("Unable to Create Streams Client: {}", e)),
         };
         let client = Client::new(client_opt, iota_cli);
-        client
+        Ok(client)
     }
 
     pub fn make_client_opt(url: &str, local_pow: bool) -> SendOptions {

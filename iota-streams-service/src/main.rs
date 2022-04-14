@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use tokio::join;
 use tokio::sync::mpsc;
 use tonic::transport::Server;
@@ -19,8 +22,10 @@ mod msg_util;
 /// Tokio runtime and start-up code for server implementation
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
     let cfg = load_config_file();
     let addr = cfg.socket.parse()?;
+    info!("Start IOTA Streams Service");
     // Communication channel used btw streams_state_machine and GRPC server
     let (tx, rx) = mpsc::channel::<QueueElem>(32);
     let service = IotaStreamsService::new(tx.clone());

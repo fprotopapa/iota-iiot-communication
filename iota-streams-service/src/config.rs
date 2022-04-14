@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use confy;
 use serde_derive::{Deserialize, Serialize};
 use std::env;
@@ -5,7 +6,18 @@ use std::env;
 const ENV_GRPC_SOCKET: &str = "STREAMS_GRPC_SOCKET";
 /// Default GRPC Socket
 const DEFAULT_GRPC_SOCKET: &str = "[::1]:50052";
-
+/// ENV name for Node URL for Tangle communication: STREAMS_NODE_URL
+pub const ENV_NODE_URL: &str = "STREAMS_NODE_URL";
+/// ENV name for local Proof of work setting: STREAMS_LOCAL_POW (default: false)
+pub const ENV_LOCAL_POW: &str = "STREAMS_LOCAL_POW";
+/// ENV name to set password for exporting author and subscriber state
+pub const ENV_STATE_PWD: &str = "STREAMS_STATE_PWD";
+/// Default valuefor node URL and password
+pub const DEFAULT_NODE_URL: &str = "https://chrysalis-nodes.iota.org";
+/// Default value for password to export states
+pub const DEFAULT_STATE_PWD: &str = "123456";
+/// Default value for folder name for saving exported states
+pub const EXPORT_STATE_PATH: &str = "states";
 /// Structure used to parse configuration file
 /// Socket needed for GRPC server, for example \[::1]:50051
 #[derive(Debug, Serialize, Deserialize)]
