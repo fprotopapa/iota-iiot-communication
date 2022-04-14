@@ -5,7 +5,7 @@ use std::env;
 pub const TOPIC_DID: &str = "did";
 pub const TOPIC_SENSOR_VALUE: &str = "sensors";
 pub const TOPIC_SETTING: &str = "settings";
-pub const TOPIC_IDENTITY: &str = "identity";
+pub const _TOPIC_IDENTITY: &str = "identity";
 pub const TOPIC_STREAM: &str = "stream";
 pub const TOPIC_COMMAND: &str = "command";
 // Gateway

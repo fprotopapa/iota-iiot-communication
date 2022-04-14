@@ -5,8 +5,8 @@ use std::env;
 use std::io::Cursor;
 
 use crate::config::{
-    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET,
-    TOPIC_COMMAND, TOPIC_DID, TOPIC_SETTING, TOPIC_STREAM,
+    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_SETTING,
+    TOPIC_STREAM,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -15,12 +15,14 @@ use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
 use crate::grpc_mqtt::{MqttMsgsReply, MqttRequest};
 use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
 use crate::grpc_streams::IotaStreamsRequest;
-use crate::models::{Channel, Identification, Identity, Thing};
+use crate::models::Identity;
 use crate::mqtt_encoder as enc;
-use crate::util::{generate_random_sequence, send_mqtt_message, serialize_msg};
+use crate::util::{
+    connect_identity, connect_mqtt, connect_streams, get_channel, get_identification, get_thing,
+    helper_send_mqtt, serialize_msg,
+};
 use std::fs;
 use std::path::Path;
-use tokio::time::{sleep, Duration};
 
 pub async fn receive_mqtt_messages() -> Result<String, String> {
     info!("--- receive_mqtt_messages() ---");
@@ -151,7 +153,7 @@ async fn verify_identity(
             if response.status.eq("Verified") {
                 // Save Answer to DB
                 match get_identity(&db_client, &response.did) {
-                    Ok(r) => {
+                    Ok(_) => {
                         match db::update_identity(&db_client, &response.did, true) {
                             Ok(_) => {
                                 info!("Updated Indentity to Verified with DID: {}", &response.did);
@@ -181,13 +183,26 @@ async fn verify_identity(
                     }
                 };
             } else {
-                // ToDo
                 // Not Verified, make Identity Unverifiable
+                match db::update_identity_to_unverifiable(&db_client, &response.did, true) {
+                    Ok(_) => {
+                        info!(
+                            "Identity Marked as Unverifiable with DID: {}",
+                            &response.did
+                        );
+                        return Ok(0);
+                    }
+                    Err(_) => {
+                        return Err(format!(
+                            "Unable to Make Identity Unverifiable with DID: {}",
+                            &response.did
+                        ))
+                    }
+                };
             }
         }
         Err(e) => return Err(format!("Unable to Verify Identity: {}", e)),
     };
-    Ok(0)
 }
 
 pub async fn mqtt_settings(payload: Vec<u8>) -> Result<u32, String> {
@@ -307,38 +322,6 @@ async fn proof_identity(
     Ok(())
 }
 
-async fn connect_mqtt() -> Result<MqttOperatorClient<tonic::transport::Channel>, String> {
-    let mqtt_client = match MqttOperatorClient::connect(format!("http://{}", MQTT_SOCKET)).await {
-        Ok(res) => res,
-        Err(e) => {
-            return Err(format!("Error Connecting to MQTT-Service: {}", e));
-        }
-    };
-    Ok(mqtt_client)
-}
-
-async fn connect_streams() -> Result<IotaStreamerClient<tonic::transport::Channel>, String> {
-    let stream_client =
-        match IotaStreamerClient::connect(format!("http://{}", STREAMS_SOCKET)).await {
-            Ok(res) => res,
-            Err(e) => {
-                return Err(format!("Error Connecting to Streams-Service: {}", e));
-            }
-        };
-    Ok(stream_client)
-}
-
-async fn connect_identity() -> Result<IotaIdentifierClient<tonic::transport::Channel>, String> {
-    let identity_client =
-        match IotaIdentifierClient::connect(format!("http://{}", IDENTITY_SOCKET)).await {
-            Ok(res) => res,
-            Err(e) => {
-                return Err(format!("Error Connecting to Identity-Service: {}", e));
-            }
-        };
-    Ok(identity_client)
-}
-
 async fn receive_messages(
     mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
 ) -> Result<MqttMsgsReply, String> {
@@ -352,30 +335,17 @@ async fn receive_messages(
     Ok(response)
 }
 
-fn get_thing(db_client: &diesel::SqliteConnection, thing_key: &str) -> Result<Thing, String> {
-    match db::select_thing(db_client, thing_key) {
-        Ok(res) => {
-            info!("Thing Entry Selected with Key: {}", &thing_key);
-            return Ok(res);
-        }
-        Err(_) => {
-            error!("Thing Entry Not Found with Key: {}", &thing_key);
-            return Err(format!("Unable to Select Thing with Key: {}", &thing_key));
-        }
-    };
-}
-
 fn get_identity(db_client: &diesel::SqliteConnection, did: &str) -> Result<Identity, String> {
     match db::select_identity(&db_client, did) {
         Ok(res) => {
             info!("Message DID Found in DB, DID: {}", did);
             return Ok(res);
         }
-        Err(e) => {
+        Err(_) => {
             make_identity(&db_client, did)?;
             match db::select_identity(&db_client, did) {
                 Ok(res) => return Ok(res),
-                Err(e) => return Err(format!("Unable to Create Identity Entry for DID: {}", did)),
+                Err(_) => return Err(format!("Unable to Create Identity Entry for DID: {}", did)),
             };
         }
     };
@@ -391,56 +361,4 @@ fn make_identity(db_client: &diesel::SqliteConnection, did: &str) -> Result<(), 
             return Err(format!("Unable to Create Identity Entry for DID: {}", did));
         }
     };
-}
-
-fn get_identification(
-    db_client: &diesel::SqliteConnection,
-    thing_id: i32,
-) -> Result<Identification, String> {
-    let identity = match db::select_identification(&db_client, thing_id) {
-        Ok(res) => {
-            info!("Selected Identity for Thing ID: {}", thing_id);
-            return Ok(res);
-        }
-        Err(_) => {
-            return Err(format!(
-                "Unable to Select Identity for Thing ID: {}",
-                thing_id
-            ))
-        }
-    };
-}
-
-fn get_channel(db_client: &diesel::SqliteConnection, channel_key: &str) -> Result<Channel, String> {
-    match db::select_channel(db_client, channel_key) {
-        Ok(res) => {
-            info!("Channel Entry Selected");
-            return Ok(res);
-        }
-        Err(_) => {
-            error!("Unable to Select Channel with Key: {}", channel_key);
-            return Err(format!(
-                "Unable to Select Channel with Key: {}",
-                channel_key
-            ));
-        }
-    };
-}
-
-async fn helper_send_mqtt(
-    mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
-    payload: Vec<u8>,
-    topic: &str,
-) -> Result<(), String> {
-    match send_mqtt_message(mqtt_client, payload, topic).await {
-        Ok(_) => info!("MQTT Message Transmitted to Service for Topic {}", topic),
-        Err(e) => {
-            error!("Error Sending MQTT Message: {}", e);
-            return Err(format!(
-                "Unable to Transmitted MQTT Messagefor Topic {}",
-                topic
-            ));
-        }
-    };
-    Ok(())
 }

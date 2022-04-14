@@ -1,8 +1,16 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
+use crate::config::{
+    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET,
+    TOPIC_COMMAND, TOPIC_DID, TOPIC_SETTING, TOPIC_STREAM,
+};
+use crate::db_module as db;
+use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
 use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
 use crate::grpc_mqtt::MqttRequest;
+use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
+use crate::models::{Channel, Identification, Thing};
 
 pub fn serialize_msg<T: prost::Message>(msg: &T) -> Vec<u8> {
     let mut buf = Vec::new();
@@ -35,4 +43,104 @@ pub fn generate_random_sequence() -> String {
         .map(char::from)
         .collect();
     rand_string
+}
+
+pub async fn connect_mqtt() -> Result<MqttOperatorClient<tonic::transport::Channel>, String> {
+    let mqtt_client = match MqttOperatorClient::connect(format!("http://{}", MQTT_SOCKET)).await {
+        Ok(res) => res,
+        Err(e) => {
+            return Err(format!("Error Connecting to MQTT-Service: {}", e));
+        }
+    };
+    Ok(mqtt_client)
+}
+
+pub async fn connect_streams() -> Result<IotaStreamerClient<tonic::transport::Channel>, String> {
+    let stream_client =
+        match IotaStreamerClient::connect(format!("http://{}", STREAMS_SOCKET)).await {
+            Ok(res) => res,
+            Err(e) => {
+                return Err(format!("Error Connecting to Streams-Service: {}", e));
+            }
+        };
+    Ok(stream_client)
+}
+
+pub async fn connect_identity() -> Result<IotaIdentifierClient<tonic::transport::Channel>, String> {
+    let identity_client =
+        match IotaIdentifierClient::connect(format!("http://{}", IDENTITY_SOCKET)).await {
+            Ok(res) => res,
+            Err(e) => {
+                return Err(format!("Error Connecting to Identity-Service: {}", e));
+            }
+        };
+    Ok(identity_client)
+}
+
+pub async fn helper_send_mqtt(
+    mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
+    payload: Vec<u8>,
+    topic: &str,
+) -> Result<(), String> {
+    match send_mqtt_message(mqtt_client, payload, topic).await {
+        Ok(_) => info!("MQTT Message Transmitted to Service for Topic {}", topic),
+        Err(e) => {
+            error!("Error Sending MQTT Message: {}", e);
+            return Err(format!(
+                "Unable to Transmitted MQTT Messagefor Topic {}",
+                topic
+            ));
+        }
+    };
+    Ok(())
+}
+
+pub fn get_channel(
+    db_client: &diesel::SqliteConnection,
+    channel_key: &str,
+) -> Result<Channel, String> {
+    match db::select_channel(db_client, channel_key) {
+        Ok(res) => {
+            info!("Channel Entry Selected");
+            return Ok(res);
+        }
+        Err(_) => {
+            error!("Unable to Select Channel with Key: {}", channel_key);
+            return Err(format!(
+                "Unable to Select Channel with Key: {}",
+                channel_key
+            ));
+        }
+    };
+}
+
+pub fn get_thing(db_client: &diesel::SqliteConnection, thing_key: &str) -> Result<Thing, String> {
+    match db::select_thing(db_client, thing_key) {
+        Ok(res) => {
+            info!("Thing Entry Selected with Key: {}", &thing_key);
+            return Ok(res);
+        }
+        Err(_) => {
+            error!("Thing Entry Not Found with Key: {}", &thing_key);
+            return Err(format!("Unable to Select Thing with Key: {}", &thing_key));
+        }
+    };
+}
+
+pub fn get_identification(
+    db_client: &diesel::SqliteConnection,
+    thing_id: i32,
+) -> Result<Identification, String> {
+    let identity = match db::select_identification(&db_client, thing_id) {
+        Ok(res) => {
+            info!("Selected Identity for Thing ID: {}", thing_id);
+            return Ok(res);
+        }
+        Err(_) => {
+            return Err(format!(
+                "Unable to Select Identity for Thing ID: {}",
+                thing_id
+            ))
+        }
+    };
 }

@@ -196,6 +196,28 @@ pub fn update_identity(
         }
     };
 }
+/// Update Identity Make Unverifiable
+pub fn update_identity_to_unverifiable(
+    conn: &SqliteConnection,
+    digital_id: &str,
+    is_unverifiable: bool,
+) -> Result<i32, i32> {
+    use self::identities::dsl::*;
+    match diesel::update(identities)
+        .filter(did.eq(digital_id))
+        .set(unverifiable.eq(is_unverifiable))
+        .execute(conn)
+    {
+        Ok(r) => {
+            info!("Affected Rows: {}", r);
+            return Ok(r as i32);
+        }
+        Err(e) => {
+            error!("{}", e);
+            return Err(-1);
+        }
+    };
+}
 /// Select Identity
 pub fn select_identity(conn: &SqliteConnection, digital_id: &str) -> Result<models::Identity, i32> {
     use self::identities::dsl::*;
