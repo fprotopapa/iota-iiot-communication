@@ -1,3 +1,5 @@
+use serde_json::json;
+
 use grpc_identity::iota_identifier_client::IotaIdentifierClient;
 use grpc_identity::{IotaIdentityCreationRequest, IotaIdentityRequest};
 
@@ -18,10 +20,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = load_config_file();
     let mut client = IotaIdentifierClient::connect(format!("http://{}", cfg.grpc.socket)).await?;
     // Create new identity
+    let vc = json!({
+        "Gateway": {
+            "id": "12345",
+            "name": "Sensor DHP"
+        }
+    });
     let msg = IotaIdentityCreationRequest {
-        device_id: "1".to_string(),
-        device_name: "My first device".to_string(),
-        device_type: "Gateway".to_string(),
+        verifiable_credential: vc.to_string(),
     };
     let response = client.create_identity(tonic::Request::new(msg)).await?;
     let response = response.into_inner();

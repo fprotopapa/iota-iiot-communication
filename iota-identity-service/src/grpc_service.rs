@@ -20,18 +20,14 @@ impl IotaIdentifier for IotaIdentityService {
         request: Request<IotaIdentityCreationRequest>,
     ) -> Result<Response<IotaIdentityReply>, Status> {
         let request = request.into_inner();
-        println!("create_new_identity: {:?}", request);
-        let reply = match identity::create_identity(identity::IdentityCreation {
-            device_id: request.device_id,
-            device_name: request.device_name,
-            device_type: request.device_type,
-        })
-        .await
-        {
+        info!("create_new_identity: {:?}", request);
+        let reply = match identity::create_identity(&request.verifiable_credential).await {
             Ok(r) => r,
             Err(e) => {
-                println! {"{}", e};
-                return Err(Status::cancelled("Identity Not Created"));
+                return Err(Status::cancelled(format!(
+                    "Unable to Create Identity: {}",
+                    e
+                )))
             }
         };
 
@@ -40,6 +36,7 @@ impl IotaIdentifier for IotaIdentityService {
             challenge: reply.challenge,
             verifiable_credential: reply.verifiable_credential,
             status: reply.status,
+            code: reply.code,
         }))
     }
 
@@ -48,19 +45,20 @@ impl IotaIdentifier for IotaIdentityService {
         request: Request<IotaIdentityRequest>,
     ) -> Result<Response<IotaIdentityReply>, Status> {
         let request = request.into_inner();
-        println!("verify_identity: {:?}", request);
-        let reply = match identity::verify_identity(identity::IdentityInformation {
+        info!("verify_identity: {:?}", request);
+        let reply = match identity::verify_identity(identity::IdentityInformationRequest {
             did: request.did,
             challenge: request.challenge,
             verifiable_credential: request.verifiable_credential,
-            status: "".to_string(),
         })
         .await
         {
             Ok(r) => r,
             Err(e) => {
-                println! {"{}", e};
-                return Err(Status::cancelled("Error: Verification Not Completed"));
+                return Err(Status::cancelled(format!(
+                    "Unable to Verify Identity: {}",
+                    e
+                )))
             }
         };
         Ok(Response::new(IotaIdentityReply {
@@ -68,6 +66,7 @@ impl IotaIdentifier for IotaIdentityService {
             challenge: reply.challenge,
             verifiable_credential: reply.verifiable_credential,
             status: reply.status,
+            code: reply.code,
         }))
     }
 
@@ -76,26 +75,23 @@ impl IotaIdentifier for IotaIdentityService {
         request: Request<IotaIdentityRequest>,
     ) -> Result<Response<IotaIdentityReply>, Status> {
         let request = request.into_inner();
-        println!("proof_identity: {:?}", request);
-        let reply = match identity::proof_identity(identity::IdentityInformation {
+        info!("proof_identity: {:?}", request);
+        let reply = match identity::proof_identity(identity::IdentityInformationRequest {
             did: request.did,
             challenge: request.challenge,
             verifiable_credential: request.verifiable_credential,
-            status: "".to_string(),
         })
         .await
         {
             Ok(r) => r,
-            Err(e) => {
-                println! {"{}", e};
-                return Err(Status::cancelled("Error: Proof Not Completed"));
-            }
+            Err(e) => return Err(Status::cancelled(format!("Unable to Create Proof: {}", e))),
         };
         Ok(Response::new(IotaIdentityReply {
             did: reply.did,
             challenge: reply.challenge,
             verifiable_credential: reply.verifiable_credential,
             status: reply.status,
+            code: reply.code,
         }))
     }
 }

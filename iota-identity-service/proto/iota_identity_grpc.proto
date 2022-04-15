@@ -10,9 +10,7 @@ service IotaIdentifier {
 
 message IotaIdentityCreationRequest {
   // Request message for creating Iota Identity
-  string device_id = 1;
-  string device_name = 2;
-  string device_type = 3;
+  string verifiable_credential = 1;
 }
 
 message IotaIdentityRequest {
@@ -28,4 +26,5 @@ message IotaIdentityReply {
   string challenge = 2;
   string verifiable_credential = 3;
   string status = 4;
+  int32 code = 5;
 }

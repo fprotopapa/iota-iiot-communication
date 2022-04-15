@@ -1,10 +1,11 @@
+use serde_json::Value;
 use std::env;
 use std::path::{Path, PathBuf};
 
 use identity::account::{Account, AccountStorage, IdentitySetup, Result};
-use identity::core::{json, FromJson, ToJson, Url};
+use identity::core::{FromJson, ToJson, Url};
 use identity::credential::{Credential, Subject};
-use identity::crypto::{KeyPair, SignatureOptions};
+use identity::crypto::SignatureOptions;
 use identity::did::verifiable::VerifierOptions;
 use identity::did::DID;
 use identity::iota::{IotaDID, ResolvedIotaDocument, Resolver};
@@ -13,46 +14,48 @@ use crate::config::{
     load_config_file, save_config_file, DEFAULT_STRONGHOLD_PWD, ENV_STRONGHOLD_PWD,
     STRONGHOLD_FILE, STRONGHOLD_FOLDER,
 };
-/// Structure for data needed to create new identity
+/// Structure for exchanging data needed to make proofs,
+/// verify and exchange identity information for requests
 #[derive(Debug, Default)]
-pub struct IdentityCreation {
-    pub device_id: String,
-    pub device_name: String,
-    pub device_type: String,
+pub struct IdentityInformationRequest {
+    pub did: String,
+    pub challenge: String,
+    pub verifiable_credential: String,
 }
 /// Structure for exchanging data needed to make proofs,
-/// verify and exchange identity information
+/// verify and exchange identity information for replies
 #[derive(Debug, Default)]
-pub struct IdentityInformation {
+pub struct IdentityInformationReply {
     pub did: String,
     pub challenge: String,
     pub verifiable_credential: String,
     pub status: String,
+    pub code: i32,
 }
 /// Verifies verifiable credential signed with challenge.
 /// Structure IdentityInformation needs did, challenge and VC to verifiy
 /// Returns verification status ("Verified" or "Not Verified") or error
-pub async fn verify_identity(request: IdentityInformation) -> Result<IdentityInformation, String> {
-    let mut reply = IdentityInformation::default();
-    let did = match IotaDID::parse(&request.did) {
-        Ok(res) => res,
-        Err(e) => return Err(e.to_string()),
-    };
+pub async fn verify_identity(
+    request: IdentityInformationRequest,
+) -> Result<IdentityInformationReply, String> {
+    let did = parse_did(&request.did)?;
     // Make credential form string
-    let credential: Credential = match Credential::from_json(&request.verifiable_credential) {
-        Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
-    };
+    let credential = parse_vc(&request.verifiable_credential)?;
     // Fetch the DID Document from the Tangle
     let resolver: Resolver = match Resolver::new().await {
         Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => {
+            error!("Unable to Fetch Document from Tangle: {}", e);
+            return Err(format!("Unable to Fetch Document from Tangle: {}", e));
+        }
     };
     let resolved: ResolvedIotaDocument = match resolver.resolve(&did).await {
         Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => {
+            error!("Unable to Resolve Document: {}", e);
+            return Err(format!("Unable to Resolve Document: {}", e));
+        }
     };
-
     // Ensure the resolved DID Document can verify the credential signature
     let verified: bool = resolved
         .document
@@ -68,28 +71,33 @@ pub async fn verify_identity(request: IdentityInformation) -> Result<IdentityInf
             },
         )
         .is_ok();
-    reply.status = if verified {
-        "Verified".to_string()
+    let (status, code) = if verified {
+        ("Identity Successfully Verified".to_string(), 0)
     } else {
-        "Not Verified".to_string()
+        ("Unable to Verify Identity".to_string(), -1)
     };
-    println!("Credential Verified = {}", verified);
-    Ok(reply)
+    info!("DID: '{}' is Verified: {}", did, verified);
+    Ok(IdentityInformationReply {
+        did: request.did,
+        challenge: "".to_string(),
+        verifiable_credential: request.verifiable_credential,
+        status: status,
+        code: code,
+    })
 }
 /// Generates verifiable credential signed with challenge.
 /// Structure IdentityInformation needs did and challenge
 /// Returns verification DID, Challenge (used to sign VC) and signed VC or error
-pub async fn proof_identity(request: IdentityInformation) -> Result<IdentityInformation, String> {
+pub async fn proof_identity(
+    request: IdentityInformationRequest,
+) -> Result<IdentityInformationReply, String> {
     let cfg = load_config_file();
     // Load account from disk
     let stronghold_path: PathBuf = Path::new(".").join(STRONGHOLD_FOLDER).join(STRONGHOLD_FILE);
     let password: String =
         env::var(ENV_STRONGHOLD_PWD).unwrap_or_else(|_| DEFAULT_STRONGHOLD_PWD.to_string());
     // Parse DID
-    let did = match IotaDID::parse(request.did.as_str()) {
-        Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
-    };
+    let did = parse_did(&request.did)?;
     let account: Account = match Account::builder()
         .storage(AccountStorage::Stronghold(
             stronghold_path,
@@ -100,15 +108,13 @@ pub async fn proof_identity(request: IdentityInformation) -> Result<IdentityInfo
         .await
     {
         Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => {
+            error!("Unable to Import Account: {}", e);
+            return Err(format!("Unable to Import Account: {}", e));
+        }
     };
-
     // Load VC and convert to Credential
-    let cred_json = cfg.identity.verifiable_credential;
-    let mut credential: Credential = match Credential::from_json(&cred_json) {
-        Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
-    };
+    let mut credential = parse_vc(&cfg.identity.verifiable_credential)?;
     // Sign the Credential with Challenge
     match account
         .sign(
@@ -124,25 +130,34 @@ pub async fn proof_identity(request: IdentityInformation) -> Result<IdentityInfo
         )
         .await
     {
-        Ok(_r) => println!("Signed Verifiable Credential"),
-        Err(e) => return Err(e.to_string()),
+        Ok(_) => info!(
+            "Signed Verifiable Credential with Challenge: {}",
+            &request.challenge
+        ),
+        Err(e) => {
+            error!(
+                "Unable to Sign VC with Challenge '{}': {}",
+                &request.challenge, e
+            );
+            return Err(format!(
+                "Unable to Sign VC with Challenge '{}': {}",
+                &request.challenge, e
+            ));
+        }
     };
-
-    let vc = match credential.to_json() {
-        Ok(res) => res,
-        Err(e) => return Err(e.to_string()),
-    };
-    Ok(IdentityInformation {
+    let vc = credential_to_json(credential)?;
+    Ok(IdentityInformationReply {
         did: request.did,
         challenge: request.challenge,
         verifiable_credential: vc,
         status: "Ok".to_string(),
+        code: 0,
     })
 }
 /// Creates new identity.
 /// Structure IdentityCreation needs device ID, Name and Type
 /// Returns DID, unsigned VC (DID and VC also saved to config file) or error
-pub async fn create_identity(request: IdentityCreation) -> Result<IdentityInformation, String> {
+pub async fn create_identity(vc: &str) -> Result<IdentityInformationReply, String> {
     let mut cfg = load_config_file();
     // Stronghold settings
     let stronghold_path: PathBuf = Path::new(".").join(STRONGHOLD_FOLDER).join(STRONGHOLD_FILE);
@@ -159,9 +174,11 @@ pub async fn create_identity(request: IdentityCreation) -> Result<IdentityInform
         .await
     {
         Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => {
+            error!("Unable to Create Account: {}", e);
+            return Err(format!("Unable to Create Account: {}", e));
+        }
     };
-
     // Add a new Ed25519 Verification Method to the identity
     match account
         .update_identity()
@@ -170,35 +187,37 @@ pub async fn create_identity(request: IdentityCreation) -> Result<IdentityInform
         .apply()
         .await
     {
-        Ok(_r) => println!("New Verification Method Added"),
-        Err(e) => return Err(e.to_string()),
+        Ok(_r) => info!("New Verification Method Added to Account"),
+        Err(e) => {
+            error!("Unable to Add Verification Method to Account: {}", e);
+            return Err(format!(
+                "Unable to Add Verification Method to Account: {}",
+                e
+            ));
+        }
     };
-
     // Create a subject DID for the recipient of a `UniversityDegree` credential.
-    let subject_key: KeyPair = match KeyPair::new_ed25519() {
+    let vc_json: Value = match serde_json::from_str(vc) {
         Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => {
+            error!("Unable to Parse VC to JSON: {}", e);
+            return Err(format!("Unable to Parse VC to JSON: {}", e));
+        }
     };
-    let subject_did: IotaDID = match IotaDID::new(subject_key.public().as_ref()) {
+    let subject: Subject = match Subject::from_json_value(vc_json) {
         Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => {
+            error!("Unable to Parse VC to Subject: {}", e);
+            return Err(format!("Unable to Parse VC to Subject: {}", e));
+        }
     };
-    // Create the actual Verifiable Credential subject.
-    let subject: Subject = match Subject::from_json_value(json!({
-    "id": subject_did.as_str(),
-    request.device_type.as_str(): {
-        "id": request.device_id.as_str(),
-        "name": request.device_name.as_str()
-    }
-    })) {
-        Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
-    };
-
     // Issue an unsigned Credential...
     let did = match Url::parse(account.did().as_str()) {
         Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => {
+            error!("Unable to Import DID From Account: {}", e);
+            return Err(format!("Unable to Import DID From Account: {}", e));
+        }
     };
     let credential: Credential = match Credential::builder(Default::default())
         .issuer(did.clone())
@@ -207,42 +226,53 @@ pub async fn create_identity(request: IdentityCreation) -> Result<IdentityInform
         .build()
     {
         Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => {
+            error!("Unable to Create VC: {}", e);
+            return Err(format!("Unable to Create VC: {}", e));
+        }
     };
-    let cred_json = match credential.to_json() {
-        Ok(r) => r,
-        Err(e) => return Err(e.to_string()),
-    };
+    let cred_json = credential_to_json(credential)?;
     // Save VC to file
+    info!("Save DID: {} and VC {} to Config File", &did, &cred_json);
     cfg.identity.did = did.to_string();
     cfg.identity.verifiable_credential = cred_json.clone();
     save_config_file(cfg);
 
-    Ok(IdentityInformation {
+    Ok(IdentityInformationReply {
         did: did.to_string(),
         challenge: "".to_string(),
         verifiable_credential: cred_json,
         status: "Ok".to_string(),
+        code: 0,
     })
 }
 
-// pub async update_identity() {
-//     // Load account from disk
-//     let account: Account = Account::builder()
-//         .storage(AccountStorage::Stronghold(
-//             stronghold_path,
-//             Some(password),
-//             None,
-//         ))
-//         .load_identity(did)
-//         .await?;
-//      let iota_did: &IotaDID = account.did();
-//      let resolved: ResolvedIotaDocument = account.resolve_identity().await?;
-//      // Prints the Identity Resolver Explorer URL.
-//      // The entire history can be observed on this page by clicking "Loading History".
-//      let explorer: &ExplorerUrl = ExplorerUrl::mainnet();
-//      println!(
-//          "[Example] Explore the DID Document = {}",
-//          explorer.resolver_url(&did)?
-//      );
-// }
+fn credential_to_json(credential: Credential) -> Result<String, String> {
+    match credential.to_json() {
+        Ok(r) => return Ok(r),
+        Err(e) => {
+            error!("Unable to Parse Credential to JSON: {}", e);
+            return Err(format!("Unable to Parse Credential to JSON: {}", e));
+        }
+    };
+}
+
+fn parse_did(did: &str) -> Result<IotaDID, String> {
+    match IotaDID::parse(did) {
+        Ok(res) => return Ok(res),
+        Err(e) => {
+            error!("Unable to Parse DID: {}", e);
+            return Err(format!("Unable to Parse DID: {}", e));
+        }
+    };
+}
+
+fn parse_vc(vc: &str) -> Result<Credential, String> {
+    match Credential::from_json(vc) {
+        Ok(r) => return Ok(r),
+        Err(e) => {
+            error!("Unable to Parse VC from Request: {}", e);
+            return Err(format!("Unable to Parse VC from Request: {}", e));
+        }
+    };
+}
