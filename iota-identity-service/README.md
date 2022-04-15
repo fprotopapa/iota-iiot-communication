@@ -6,7 +6,7 @@ Communication over GRPC. This repository has Server and Client implementation.
 ## Build
 
 ```
-cargo build
+cargo build or cross build --target <target>
 cargo doc --open
 ```
 
@@ -14,6 +14,7 @@ Tested:
 * cargo v1.56.0
 * rustc v1.56.1
 * stable
+* cross 0.2.1
 
 Architecture:
 * x86_64-unknown-linux-gnu
