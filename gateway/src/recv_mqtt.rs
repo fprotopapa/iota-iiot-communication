@@ -154,7 +154,7 @@ async fn verify_identity(
         Err(e) => return Err(format!("Unable to Verify Identity: {}", e)),
     };
     // Check if Verification was a success, GRPC Call returns Status = "Verified"
-    if response.status.eq("Verified") {
+    if response.code == 0 {
         // Save Answer to DB
         match get_identity(&db_client, &response.did) {
             Ok(_) => {

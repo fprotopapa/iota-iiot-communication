@@ -1,7 +1,10 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
+use std::env;
 
-use crate::config::{IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET};
+use crate::config::{
+    ENV_CHANNEL_KEY, ENV_THING_KEY, ENV_THING_PWD, IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET,
+};
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
 use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
@@ -23,6 +26,9 @@ pub async fn send_mqtt_message(
 ) -> Result<String, String> {
     let _response = match client
         .send_mqtt_message(tonic::Request::new(MqttRequest {
+            id: env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found"),
+            pwd: env::var(ENV_THING_PWD).expect("ENV for Thing PWD not Found"),
+            channel: env::var(ENV_CHANNEL_KEY).expect("ENV for Channel Key not Found"),
             topic: topic.to_string(),
             message: payload,
         }))

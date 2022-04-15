@@ -10,13 +10,17 @@ service MqttOperator {
 
 message MqttRequest {
     // Request Message for MQTT Service
-    string topic = 1;
-    bytes message = 2;
+    string id = 1;
+    string pwd = 2;
+    string channel = 3;
+    string topic = 4;
+    bytes message = 5;
 }
 
 message MqttReply {
     // Reply Message for MQTT Service
     string status = 1;
+    int32 code = 2;
 }
 
 message MqttMsgsReply {
@@ -24,4 +28,5 @@ message MqttMsgsReply {
     repeated string topics = 1;
     repeated bytes messages = 2;
     string status = 3;
+    int32 code = 4;
 }

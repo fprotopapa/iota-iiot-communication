@@ -1,21 +1,22 @@
 use public_ip;
+use serde_json::json;
 use std::env;
 
 use crate::config::{
     load_config_file, Sensor, ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_DEVICE_NAME, ENV_DEVICE_TYPE,
-    ENV_THING_KEY, IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET, TOPIC_DID, TOPIC_SETTING,
+    ENV_THING_KEY, IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET, TOPIC_IDENTITY, TOPIC_SETTING,
     TOPIC_STREAM,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
-use crate::grpc_identity::IotaIdentityCreationRequest;
+use crate::grpc_identity::{IotaIdentityCreationRequest, IotaIdentityRequest};
 use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
 use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
 use crate::grpc_streams::IotaStreamsRequest;
 use crate::models::Identification;
 use crate::models::{Channel, Thing};
 use crate::mqtt_encoder as enc;
-use crate::util::{send_mqtt_message, serialize_msg};
+use crate::util::{generate_random_sequence, send_mqtt_message, serialize_msg};
 
 pub async fn init() -> Result<bool, bool> {
     let cfg = load_config_file();
@@ -63,6 +64,7 @@ pub async fn init() -> Result<bool, bool> {
         &author_id,
         &device_name,
         &device_type,
+        cfg.sensors.list.clone(),
     )
     .await?;
     // Create Config Entry
@@ -186,6 +188,7 @@ pub async fn generate_gateway_did(
     author_id: &str,
     device_name: &str,
     device_type: &str,
+    sensors: Vec<Sensor>,
 ) -> Result<Identification, bool> {
     // Check if DID already exists
     match db::select_identification(&db_client, thing_id) {
@@ -201,11 +204,10 @@ pub async fn generate_gateway_did(
                 thing_id
             );
             info!("Creating New Identity with Identity Service");
+            let vc = build_verifiable_credential(author_id, device_name, device_type, sensors);
             let identity = match identity_client
                 .create_identity(IotaIdentityCreationRequest {
-                    device_id: author_id.to_string(),
-                    device_name: device_name.to_string(),
-                    device_type: device_type.to_string(),
+                    verifiable_credential: vc,
                 })
                 .await
             {
@@ -227,19 +229,34 @@ pub async fn generate_gateway_did(
             ) {
                 Ok(_) => {
                     info!("Identity Entry Created for DID: {}", &identity.did);
-                    let payload = serialize_msg(&enc::Did {
-                        did: identity.did.clone(),
-                        challenge: "".to_string(),
-                        vc: identity.verifiable_credential.clone(),
-                        proof: true,
-                    });
-                    helper_send_mqtt(mqtt_client, payload, TOPIC_DID).await?;
                 }
                 Err(_) => {
                     error!("Error Creating Identity Entry for DID: {}", &identity.did);
                     return Err(false);
                 }
             };
+            // ToDo Verify with Challenge and send to MQTT Identity
+            let response = match identity_client
+                .verify_identity(tonic::Request::new(IotaIdentityRequest {
+                    did: identity.did,
+                    challenge: generate_random_sequence(),
+                    verifiable_credential: identity.verifiable_credential,
+                }))
+                .await
+            {
+                Ok(res) => {
+                    let response = res.into_inner();
+                    response
+                }
+                Err(e) => return Err(format!("Unable to Verify Identity: {}", e)),
+            };
+            let payload = serialize_msg(&enc::Did {
+                did: response.did,
+                challenge: response.challenge,
+                vc: response.verifiable_credential,
+                proof: false,
+            });
+            helper_send_mqtt(&mut mqtt_client, payload, TOPIC_IDENTITY).await?;
             return Ok(Identification {
                 id: 0,
                 thing_id: thing_id,
@@ -248,6 +265,22 @@ pub async fn generate_gateway_did(
             });
         }
     };
+}
+
+fn build_verifiable_credential(
+    id: &str,
+    name: &str,
+    device_type: &str,
+    sensors: Vec<Sensor>,
+) -> String {
+    json!({
+        "device": {
+            "type": device_type,
+            "id": id,
+            "name": name,
+            "sensors": sensors
+        }
+    })
 }
 
 async fn helper_send_mqtt(

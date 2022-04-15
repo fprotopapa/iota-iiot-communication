@@ -5,7 +5,7 @@ use std::env;
 pub const TOPIC_DID: &str = "did";
 pub const TOPIC_SENSOR_VALUE: &str = "sensors";
 pub const TOPIC_SETTING: &str = "settings";
-pub const _TOPIC_IDENTITY: &str = "identity";
+pub const TOPIC_IDENTITY: &str = "identity";
 pub const TOPIC_STREAM: &str = "stream";
 pub const TOPIC_COMMAND: &str = "command";
 // Gateway
@@ -20,6 +20,7 @@ pub const ENV_DEVICE_TYPE: &str = "DEVICE_TYPE";
 pub const ENV_DEVICE_ID: &str = "DEVICE_ID";
 pub const ENV_CHANNEL_KEY: &str = "CHANNEL_ID";
 pub const ENV_THING_KEY: &str = "THING_NAME";
+pub const ENV_THING_PWD: &str = "THING_PWD";
 /// ENV for GRPC Socket
 const ENV_GRPC_SOCKET: &str = "GATEWAY_GRPC_SOCKET";
 /// Default GRPC Socket
@@ -43,7 +44,7 @@ pub struct Sensors {
     pub list: Vec<Sensor>,
 }
 /// Sensor Information
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Sensor {
     pub sensor_id: String,
     pub sensor_name: String,
