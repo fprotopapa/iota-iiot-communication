@@ -27,7 +27,6 @@ pub struct ChannelRequest {
     pub link: String,
     pub tx: oneshot::Sender<QueueElem>,
     pub messages: Option<Vec<String>>,
-    pub pk: Option<Vec<u8>>,
 }
 /// Reply Message, from State Machine to Server
 #[derive(Debug)]
@@ -35,9 +34,9 @@ pub struct ChannelReply {
     pub id: String,
     pub msg_type: MsgType,
     pub status: String,
+    pub code: i32,
     pub link: String,
     pub messages: Option<Vec<String>>,
-    pub pk: Option<Vec<u8>>,
 }
 /// Structure for Implementing GRPC Calls,
 /// tx: Stable MPSC Communication channel
@@ -68,7 +67,7 @@ impl IotaStreamer for IotaStreamsService {
                     msg_type: convert_from_msgtype(response.msg_type),
                     link: response.link,
                     status: response.status,
-                    pk: Vec::new(),
+                    code: response.code,
                 }))
             }
             Err(e) => return Err(Status::cancelled(format!("Author Not Generated: {}", e))),
@@ -87,10 +86,7 @@ impl IotaStreamer for IotaStreamsService {
                     msg_type: convert_from_msgtype(response.msg_type),
                     link: response.link,
                     status: response.status,
-                    pk: match response.pk {
-                        Some(r) => r,
-                        None => Vec::new(),
-                    },
+                    code: response.code,
                 }))
             }
             Err(e) => {
@@ -114,7 +110,7 @@ impl IotaStreamer for IotaStreamsService {
                     msg_type: convert_from_msgtype(response.msg_type),
                     link: response.link,
                     status: response.status,
-                    pk: Vec::new(),
+                    code: response.code,
                 }))
             }
             Err(e) => return Err(Status::cancelled(format!("Subscriber Not Added: {}", e))),
@@ -133,7 +129,7 @@ impl IotaStreamer for IotaStreamsService {
                     msg_type: convert_from_msgtype(response.msg_type),
                     link: response.link,
                     status: response.status,
-                    pk: Vec::new(),
+                    code: response.code,
                 }))
             }
             Err(e) => return Err(Status::cancelled(format!("Keyload Not Received: {}", e))),
@@ -155,7 +151,6 @@ impl IotaStreamer for IotaStreamsService {
                 link: request.message_link,
                 tx: tx_one,
                 messages: Some(vec![request.message]),
-                pk: Some(Vec::new()),
             }))
             .await
         {
@@ -179,7 +174,7 @@ impl IotaStreamer for IotaStreamsService {
             msg_type: convert_from_msgtype(response.msg_type),
             link: response.link,
             status: response.status,
-            pk: Vec::new(),
+            code: response.code,
         }));
     }
 
@@ -198,7 +193,6 @@ impl IotaStreamer for IotaStreamsService {
                 link: request.link,
                 tx: tx_one,
                 messages: None,
-                pk: None,
             }))
             .await
         {
@@ -234,13 +228,14 @@ impl IotaStreamer for IotaStreamsService {
             id: response.id,
             msg_type: convert_from_msgtype(response.msg_type),
             link: response.link,
+            code: response.code,
             status: response.status,
             received_messages: messages.len() as u32,
             messages: messages,
         }));
     }
 
-    async fn revoke_access(
+    async fn create_keyload(
         &self,
         request: Request<IotaStreamsRequest>,
     ) -> Result<Response<IotaStreamsReply>, Status> {
@@ -252,7 +247,7 @@ impl IotaStreamer for IotaStreamsService {
                     msg_type: convert_from_msgtype(response.msg_type),
                     link: response.link,
                     status: response.status,
-                    pk: Vec::new(),
+                    code: response.code,
                 }))
             }
             Err(e) => return Err(Status::cancelled(format!("Access Not Removed: {}", e))),
@@ -273,7 +268,6 @@ async fn thread_communication(
             link: request.link,
             tx: tx_one,
             messages: None,
-            pk: Some(request.pk),
         }))
         .await
     {

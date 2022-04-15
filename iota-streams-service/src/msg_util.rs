@@ -10,7 +10,7 @@ pub enum MsgType {
     ReceiveKeyload,
     SendMessage,
     ReceiveMessages,
-    RevokeAccess,
+    CreateKeyload,
     Unknown,
 }
 /// Convert u32 to MsgType
@@ -24,7 +24,7 @@ pub fn convert_to_msgtype(num: u32) -> MsgType {
         4 => MsgType::ReceiveKeyload,
         5 => MsgType::SendMessage,
         6 => MsgType::ReceiveMessages,
-        7 => MsgType::RevokeAccess,
+        7 => MsgType::CreateKeyload,
         _ => MsgType::Unknown,
     }
 }
@@ -39,7 +39,7 @@ pub fn convert_from_msgtype(msg_type: MsgType) -> u32 {
         MsgType::ReceiveKeyload => 4,
         MsgType::SendMessage => 5,
         MsgType::ReceiveMessages => 6,
-        MsgType::RevokeAccess => 7,
+        MsgType::CreateKeyload => 7,
         MsgType::Unknown => 8,
     }
 }

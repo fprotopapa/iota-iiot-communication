@@ -46,6 +46,12 @@ pub mod streams_author {
             subscription_link
         );
         receive_subscription(&mut author, &sub_link).await;
+        export_state(&mut author, id).await?;
+        Ok("Subscriber Succesfully Added".to_string())
+    }
+
+    pub async fn announce_keyload(id: &str) -> Result<String, String> {
+        let mut author = import_state(id).await?;
         let announcement_link = match author.announcement_link().clone() {
             Some(address) => address,
             None => return Err("No Announcement Link Found".to_string()),
@@ -225,16 +231,14 @@ pub mod streams_subscriber {
     pub async fn create_new_subscriber(
         id: &str,
         announcement_link: &str,
-    ) -> Result<(String, Vec<u8>), String> {
+    ) -> Result<String, String> {
         let client = make_client().await?;
         let mut subscriber = make_subscriber(client);
-        let pk = subscriber.get_public_key().as_bytes().clone().to_vec();
-        info!("Public Key: {:?}", pk);
         let ann_link = parse_address(announcement_link)?;
         receive_announcement(&mut subscriber, &ann_link).await;
         let subscription_link = make_subscription(&mut subscriber, &ann_link).await;
         export_state(&mut subscriber, id).await?;
-        Ok((subscription_link.to_string(), pk))
+        Ok(subscription_link.to_string())
     }
 
     pub async fn receive_messages(id: &str) -> Result<Vec<String>, String> {

@@ -28,7 +28,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         id: author.clone(),
         msg_type: MsgType::CreateNewAuthor as u32,
         link: "".to_string(),
-        pk: Vec::new(),
     };
     let response = client.create_new_author(tonic::Request::new(msg)).await?;
     let response = response.into_inner();
@@ -39,23 +38,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         id: subscriber.clone(),
         msg_type: MsgType::CreateNewSubscriber as u32,
         link: ann_link,
-        pk: Vec::new(),
     };
     let response = client
         .create_new_subscriber(tonic::Request::new(msg))
         .await?;
     let response = response.into_inner();
     let sub_link = response.link;
-    let pk = response.pk;
-    println!("Received Subscription Link: {}, PK: {:?}", sub_link, pk);
+    println!("Received Subscription Link: {}", sub_link);
     // Author subscribe Subscriber to channel
     let msg = IotaStreamsRequest {
         id: author.clone(),
         msg_type: MsgType::AddSubscriber as u32,
         link: sub_link,
-        pk: Vec::new(),
     };
     let response = client.add_subscriber(tonic::Request::new(msg)).await?;
+    let response = response.into_inner();
+    println!("Add Subscriber Status: {}", response.status);
+    // Author Generate Keyload
+    let msg = IotaStreamsRequest {
+        id: author.clone(),
+        msg_type: MsgType::CreateKeyload as u32,
+        link: "".to_string(),
+    };
+    let response = client.create_keyload(tonic::Request::new(msg)).await?;
     let response = response.into_inner();
     let key_link = response.link;
     println!("Received Keyload Link: {}", key_link);
@@ -64,22 +69,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         id: subscriber.clone(),
         msg_type: MsgType::ReceiveKeyload as u32,
         link: key_link.clone(),
-        pk: Vec::new(),
     };
     let response = client.receive_keyload(tonic::Request::new(msg)).await?;
     let response = response.into_inner();
     let status = response.status;
     println!("Subscriber received keyload link: {}", status);
-    // Revoke Access
-    let msg = IotaStreamsRequest {
-        id: author.clone(),
-        msg_type: MsgType::RevokeAccess as u32,
-        link: "".to_string(),
-        pk: pk,
-    };
-    let response = client.revoke_access(tonic::Request::new(msg)).await?;
-    let response = response.into_inner();
-    println!("Revoke Access: {}", response.status);
     // Author send message
     let msg = "Important message from author".to_string();
     let msg = IotaStreamsSendMessageRequest {
@@ -100,7 +94,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         id: subscriber.clone(),
         msg_type: MsgType::ReceiveMessages as u32,
         link: "".to_string(),
-        pk: Vec::new(),
     };
     let response = client.receive_messages(tonic::Request::new(msg)).await?;
     let response = response.into_inner();
