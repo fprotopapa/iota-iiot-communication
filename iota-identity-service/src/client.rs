@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let response = client.verify_identity(tonic::Request::new(msg)).await?;
     let response = response.into_inner();
-    println!("Identity is {}", response.status);
+    println!("{}", response.status);
 
     Ok(())
 }

@@ -236,7 +236,7 @@ pub async fn create_identity(vc: &str) -> Result<IdentityInformationReply, Strin
     info!("Save DID: {} and VC {} to Config File", &did, &cred_json);
     cfg.identity.did = did.to_string();
     cfg.identity.verifiable_credential = cred_json.clone();
-    save_config_file(cfg);
+    save_config_file(cfg)?;
 
     Ok(IdentityInformationReply {
         did: did.to_string(),

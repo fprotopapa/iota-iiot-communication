@@ -66,15 +66,15 @@ impl Default for IdentityConfig {
 }
 /// Saving changes made in IdentityConfig structure to configuration file "identity-grpc.toml"
 /// located at ./config/
-pub fn save_config_file(cfg: IdentityConfig) {
+pub fn save_config_file(cfg: IdentityConfig) -> Result<String, String> {
     let config_dir = env::current_dir()
         .unwrap()
         .join("config")
         .join("identity-grpc.toml");
     let res = confy::store_path(config_dir, cfg);
     match res {
-        Ok(_r) => println!("Config file saved"),
-        Err(e) => println!("Error saving config file: {}", e),
+        Ok(_) => return Ok("Config file saved".to_string()),
+        Err(e) => return Err(format!("Error saving config file: {}", e)),
     };
 }
 /// Configuration file "identity-grpc.toml" is located at ./config/
