@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate log;
 use tonic::transport::Server;
 
 mod mqtt_module;
@@ -12,9 +14,11 @@ use config::load_config_file;
 /// Tokio Runtime and Start-Up Code for Server Implementation
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
     let cfg = load_config_file();
     let addr = cfg.grpc.socket.parse()?;
-    let service = MqttOperatorService::new(true).await;
+    info!("Start MQTT Service");
+    let service = MqttOperatorService::new().await;
     // Start thread
     let _grpc_server = Server::builder()
         .add_service(MqttOperatorServer::new(service))
