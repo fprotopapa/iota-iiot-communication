@@ -238,9 +238,9 @@ pub async fn generate_gateway_did(
             // ToDo Verify with Challenge and send to MQTT Identity
             let response = match identity_client
                 .verify_identity(tonic::Request::new(IotaIdentityRequest {
-                    did: identity.did,
+                    did: identity.did.clone(),
                     challenge: generate_random_sequence(),
-                    verifiable_credential: identity.verifiable_credential,
+                    verifiable_credential: identity.verifiable_credential.clone(),
                 }))
                 .await
             {
@@ -248,7 +248,12 @@ pub async fn generate_gateway_did(
                     let response = res.into_inner();
                     response
                 }
-                Err(e) => return Err(format!("Unable to Verify Identity: {}", e)),
+                Err(e) => {
+                    return {
+                        error!("Unable to Verify Identity: {}", e);
+                        Err(false)
+                    }
+                }
             };
             let payload = serialize_msg(&enc::Did {
                 did: response.did,
@@ -256,7 +261,7 @@ pub async fn generate_gateway_did(
                 vc: response.verifiable_credential,
                 proof: false,
             });
-            helper_send_mqtt(&mut mqtt_client, payload, TOPIC_IDENTITY).await?;
+            helper_send_mqtt(mqtt_client, payload, TOPIC_IDENTITY).await?;
             return Ok(Identification {
                 id: 0,
                 thing_id: thing_id,
@@ -281,6 +286,7 @@ fn build_verifiable_credential(
             "sensors": sensors
         }
     })
+    .to_string()
 }
 
 async fn helper_send_mqtt(

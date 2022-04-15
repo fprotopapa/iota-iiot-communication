@@ -5,8 +5,8 @@ use std::env;
 use std::io::Cursor;
 
 use crate::config::{
-    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_SETTING,
-    TOPIC_STREAM,
+    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY,
+    TOPIC_SETTING, TOPIC_STREAM,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -35,6 +35,7 @@ pub async fn receive_mqtt_messages() -> Result<String, String> {
             TOPIC_STREAM => mqtt_streams(payload.to_vec()).await,
             TOPIC_SETTING => mqtt_settings(payload.to_vec()).await,
             TOPIC_COMMAND => mqtt_command(payload.to_vec()).await,
+            TOPIC_IDENTITY => mqtt_first_verification().await,
             e => Err(format!("Topic {} not Found", e)),
             // Ignore Topics identity & sensors
         };
@@ -44,6 +45,12 @@ pub async fn receive_mqtt_messages() -> Result<String, String> {
         }
     }
     Ok("Exit with Success: receive_mqtt_messages()".to_string())
+}
+
+pub async fn mqtt_first_verification() -> Result<u32, String> {
+    info!("--- mqtt_first_verification() ---");
+
+    Ok(0)
 }
 
 pub async fn mqtt_streams(payload: Vec<u8>) -> Result<u32, String> {
