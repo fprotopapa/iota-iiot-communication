@@ -64,7 +64,7 @@ pub async fn verify_identity(
             &VerifierOptions {
                 method_scope: None,
                 method_type: None,
-                challenge: Some(request.challenge),
+                challenge: Some(request.challenge.clone()),
                 domain: None,
                 purpose: None,
                 allow_expired: None,
@@ -79,7 +79,7 @@ pub async fn verify_identity(
     info!("DID: '{}' is Verified: {}", did, verified);
     Ok(IdentityInformationReply {
         did: request.did,
-        challenge: "".to_string(),
+        challenge: request.challenge,
         verifiable_credential: request.verifiable_credential,
         status: status,
         code: code,
