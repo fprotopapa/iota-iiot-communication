@@ -10,12 +10,12 @@ pub const TOPIC_STREAM: &str = "stream";
 pub const TOPIC_COMMAND: &str = "command";
 // Gateway
 // Number of Subscribers Expected
-pub const TOTAL_NUM_SUBSCRIBER: i32 = 2;
 pub const MQTT_SOCKET: &str = "[::1]:50054";
 /// Default Streams Service GRPC Socket
 pub const STREAMS_SOCKET: &str = "[::1]:50052";
 /// Default Identity Service GRPC Socket
 pub const IDENTITY_SOCKET: &str = "[::1]:50053";
+pub const ENV_ANNLINK_PUBLIC: &str = "PUBLIC_ANN_LINK";
 pub const ENV_DEVICE_NAME: &str = "DEVICE_NAME";
 pub const ENV_DEVICE_TYPE: &str = "DEVICE_TYPE";
 pub const ENV_DEVICE_ID: &str = "DEVICE_ID";
@@ -26,8 +26,6 @@ pub const ENV_THING_PWD: &str = "THING_PWD";
 const ENV_GRPC_SOCKET: &str = "GATEWAY_GRPC_SOCKET";
 /// Default GRPC Socket
 const DEFAULT_GRPC_SOCKET: &str = "[::1]:50051";
-/// Default for Channel Buffer Size
-pub const DEFAULT_BUFFER_SIZE: usize = 32;
 /// Structure used to parse configuration file
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SensorConfig {
@@ -52,6 +50,7 @@ impl Default for SensorConfig {
 }
 /// Configuration file "streams-grpc.toml" is located at ./config/
 /// Function tries to load configuration or creates default
+#[allow(dead_code)]
 pub fn load_config_file() -> SensorConfig {
     let config_dir = env::current_dir()
         .unwrap()

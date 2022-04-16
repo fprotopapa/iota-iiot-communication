@@ -33,7 +33,6 @@ pub mod grpc_mqtt {
     tonic::include_proto!("mqtt_grpc");
 }
 
-use config::load_config_file;
 use prolog::init;
 use state_machine::state_machine;
 // Embed SQL in Binary
@@ -44,9 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     info!("Migrate DB");
     init_db();
-    let cfg = load_config_file();
-    let addr = cfg.grpc.socket.clone();
-    info!("Initialize Gateway");
+
+    info!("Initialize Client");
     while !(match init().await {
         Ok(r) => r,
         Err(e) => e,

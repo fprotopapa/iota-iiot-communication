@@ -3,8 +3,8 @@ use serde_json::json;
 use std::env;
 
 use crate::config::{
-    ENV_DEVICE_ID, ENV_DEVICE_NAME, ENV_DEVICE_TYPE, ENV_THING_KEY, IDENTITY_SOCKET, MQTT_SOCKET,
-    STREAMS_SOCKET, TOPIC_IDENTITY,
+    ENV_ANNLINK_PUBLIC, ENV_DEVICE_ID, ENV_DEVICE_NAME, ENV_DEVICE_TYPE, ENV_THING_KEY,
+    IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET, TOPIC_IDENTITY,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -60,7 +60,7 @@ pub async fn init() -> Result<bool, bool> {
     // Identity
     // Get own DID
     info!("Generate and Make Gateway DID Known");
-    let identity = generate_gateway_did(
+    let _ = generate_gateway_did(
         &db_client,
         &mut identity_client,
         &mut mqtt_client,
@@ -376,7 +376,9 @@ pub async fn init_streams(
                     return Err(false);
                 }
             };
+            env::set_var(ENV_ANNLINK_PUBLIC, &author.link);
             info!("Announcement Link: {}", &author.link);
+            info!("Saved in ENV: {}", ENV_ANNLINK_PUBLIC);
             match db::create_stream(
                 &db_client,
                 db::StreamsEntry {
