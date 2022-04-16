@@ -54,6 +54,7 @@ pub struct Stream {
     pub sub_link: Option<String>,
     pub key_link: Option<String>,
     pub msg_link: Option<String>,
+    pub num_subs: Option<i32>,
 }
 
 #[derive(Insertable)]
@@ -64,6 +65,7 @@ pub struct NewStream<'a> {
     pub sub_link: &'a str,
     pub key_link: &'a str,
     pub msg_link: &'a str,
+    pub num_subs: i32,
 }
 
 #[derive(Queryable, Debug)]

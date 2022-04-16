@@ -9,7 +9,8 @@ pub const TOPIC_IDENTITY: &str = "identity";
 pub const TOPIC_STREAM: &str = "stream";
 pub const TOPIC_COMMAND: &str = "command";
 // Gateway
-//
+// Number of Subscribers Expected
+pub const TOTAL_NUM_SUBSCRIBER: i32 = 2;
 pub const MQTT_SOCKET: &str = "[::1]:50054";
 /// Default Streams Service GRPC Socket
 pub const STREAMS_SOCKET: &str = "[::1]:50052";

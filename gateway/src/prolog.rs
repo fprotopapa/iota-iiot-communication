@@ -235,19 +235,16 @@ pub async fn generate_gateway_did(
                     return Err(false);
                 }
             };
-            // ToDo Verify with Challenge and send to MQTT Identity
+            // Proof with Challenge and send to MQTT Identity Topic
             let response = match identity_client
-                .verify_identity(tonic::Request::new(IotaIdentityRequest {
+                .proof_identity(tonic::Request::new(IotaIdentityRequest {
                     did: identity.did.clone(),
                     challenge: generate_random_sequence(),
                     verifiable_credential: identity.verifiable_credential.clone(),
                 }))
                 .await
             {
-                Ok(res) => {
-                    let response = res.into_inner();
-                    response
-                }
+                Ok(res) => res.into_inner(),
                 Err(e) => {
                     return {
                         error!("Unable to Verify Identity: {}", e);

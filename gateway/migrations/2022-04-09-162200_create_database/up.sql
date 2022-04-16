@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS streams (
     sub_link TEXT,
     key_link TEXT,
     msg_link TEXT,
+    num_subs INTEGER,
     FOREIGN KEY (channel_id)
         REFERENCES channels (id)
 );

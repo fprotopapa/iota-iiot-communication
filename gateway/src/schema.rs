@@ -70,6 +70,7 @@ table! {
         sub_link -> Nullable<Text>,
         key_link -> Nullable<Text>,
         msg_link -> Nullable<Text>,
+        num_subs -> Nullable<Integer>,
     }
 }
 

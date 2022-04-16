@@ -335,6 +335,7 @@ pub fn create_stream<'a>(conn: &SqliteConnection, entry: StreamsEntry) -> Result
         sub_link: &entry.sub_link,
         key_link: &entry.key_link,
         msg_link: &entry.msg_link,
+        num_subs: 0,
     };
 
     let entry = match diesel::insert_into(streams::table)
@@ -433,6 +434,7 @@ pub fn update_stream(
     channel_identifier: i32,
     query: &str,
     link: &str,
+    num_subscribers: i32,
 ) -> Result<i32, i32> {
     use self::streams::dsl::*;
     let query = match query {
@@ -447,6 +449,9 @@ pub fn update_stream(
             .execute(conn),
         "msg_link" => diesel::update(streams.filter(channel_id.eq(channel_identifier)))
             .set(msg_link.eq(link))
+            .execute(conn),
+        "num_subs" => diesel::update(streams.filter(channel_id.eq(channel_identifier)))
+            .set(num_subs.eq(num_subscribers))
             .execute(conn),
         _ => {
             error!("{}", query);

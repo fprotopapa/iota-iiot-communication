@@ -9,7 +9,7 @@ use crate::models::{Sensor, SensorData, SensorType, Stream};
 use crate::mqtt_encoder as enc;
 use crate::util::{
     connect_mqtt, connect_streams, get_channel, get_identification, get_thing, helper_send_mqtt,
-    serialize_msg,
+    serialize_msg, update_streams_entry,
 };
 
 pub async fn send_sensor_data() -> Result<String, String> {
@@ -100,7 +100,7 @@ pub async fn send_sensor_data() -> Result<String, String> {
         // Send IOTA Streams Message
         let response =
             send_message_to_tangle(&mut stream_client, &msg_link, &payload, &author_id).await?;
-        update_streams_entry(&db_client, &response.link, "msg_link", channel.id)?;
+        update_streams_entry(&db_client, &response.link, 0, "msg_link", channel.id)?;
         update_sensor_entry(&db_client, val.id, "iota", true)?;
         msg_link = response.link;
     }
@@ -131,19 +131,6 @@ async fn send_message_to_tangle(
         }
         Err(_) => return Err(format!("Unable to Send Message to Tangle")),
     };
-}
-
-fn update_streams_entry(
-    db_client: &diesel::SqliteConnection,
-    link: &str,
-    query: &str,
-    channel_id: i32,
-) -> Result<(), String> {
-    match db::update_stream(db_client, channel_id, query, link) {
-        Ok(_) => info!("Update {} to {}", query, link),
-        Err(_) => return Err(format!("Unable to Update {} Entry to {}", query, link)),
-    };
-    Ok(())
 }
 
 fn get_sensor_data(

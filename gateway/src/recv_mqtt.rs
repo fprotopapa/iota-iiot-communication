@@ -6,7 +6,7 @@ use std::io::Cursor;
 
 use crate::config::{
     ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY,
-    TOPIC_SETTING, TOPIC_STREAM,
+    TOPIC_SETTING, TOPIC_STREAM, TOTAL_NUM_SUBSCRIBER,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -19,7 +19,7 @@ use crate::models::Identity;
 use crate::mqtt_encoder as enc;
 use crate::util::{
     connect_identity, connect_mqtt, connect_streams, get_channel, get_identification, get_thing,
-    helper_send_mqtt, serialize_msg,
+    helper_send_mqtt, serialize_msg, update_streams_entry,
 };
 use std::fs;
 use std::path::Path;
@@ -31,11 +31,11 @@ pub async fn receive_mqtt_messages() -> Result<String, String> {
     let mut response = receive_messages(&mut mqtt_client).await?;
     for (payload, topic) in response.messages.iter_mut().zip(response.topics) {
         let result = match topic.as_str() {
-            TOPIC_DID => mqtt_identity(payload.to_vec(), &mut mqtt_client).await,
+            TOPIC_DID => mqtt_identity(payload.to_vec()).await,
             TOPIC_STREAM => mqtt_streams(payload.to_vec()).await,
             TOPIC_SETTING => mqtt_settings(payload.to_vec()).await,
             TOPIC_COMMAND => mqtt_command(payload.to_vec()).await,
-            TOPIC_IDENTITY => mqtt_first_verification().await,
+            TOPIC_IDENTITY => mqtt_first_verification(payload.to_vec()).await,
             e => Err(format!("Topic {} not Found", e)),
             // Ignore Topics identity & sensors
         };
@@ -47,9 +47,30 @@ pub async fn receive_mqtt_messages() -> Result<String, String> {
     Ok("Exit with Success: receive_mqtt_messages()".to_string())
 }
 
-pub async fn mqtt_first_verification() -> Result<u32, String> {
+pub async fn mqtt_first_verification(payload: Vec<u8>) -> Result<u32, String> {
     info!("--- mqtt_first_verification() ---");
-
+    // Decode Payload
+    let msg = match enc::Did::decode(&mut Cursor::new(payload)) {
+        Ok(res) => res,
+        Err(e) => return Err(format!("Unable to Decode Payload: {}", e)),
+    };
+    let mut identity_client = connect_identity().await?;
+    let db_client = db::establish_connection();
+    // Verify Identity
+    let response = match identity_client
+        .verify_identity(tonic::Request::new(IotaIdentityRequest {
+            did: msg.did.clone(),
+            challenge: msg.challenge,
+            verifiable_credential: msg.vc,
+        }))
+        .await
+    {
+        Ok(res) => res.into_inner(),
+        Err(e) => return Err(format!("Unable to Verify Identity: {}", e)),
+    };
+    let is_verified = if response.code == 0 { true } else { false };
+    let _ = get_identity(&db_client, &msg.did)?;
+    update_identity(&db_client, &msg.did, is_verified)?;
     Ok(0)
 }
 
@@ -82,11 +103,11 @@ pub async fn mqtt_streams(payload: Vec<u8>) -> Result<u32, String> {
     }
     // Check for Unverifiable Identities
     let msg_identity = get_identity(&db_client, &msg.did)?;
-    let unverifiable = match msg_identity.unverifiable {
+    let is_verified = match msg_identity.verified {
         Some(r) => r,
         None => false,
     };
-    if !msg.subscription_link.is_empty() && !unverifiable {
+    if !msg.subscription_link.is_empty() && is_verified {
         add_subscriber(
             &db_client,
             &mut stream_client,
@@ -102,15 +123,14 @@ pub async fn mqtt_streams(payload: Vec<u8>) -> Result<u32, String> {
     Ok(0)
 }
 
-pub async fn mqtt_identity(
-    payload: Vec<u8>,
-    mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
-) -> Result<u32, String> {
+pub async fn mqtt_identity(payload: Vec<u8>) -> Result<u32, String> {
     info!("--- mqtt_identity() ---");
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
     info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Connect to Identity Service
     let mut identity_client = connect_identity().await?;
+    // Connect to MQTT Service
+    let mut mqtt_client = connect_mqtt().await?;
     // Connect to Database
     let db_client = db::establish_connection();
     // Decode Message
@@ -132,7 +152,7 @@ pub async fn mqtt_identity(
     // Sign VC with challenge
     if msg.proof && is_thing {
         info!("Proof Gateway Identity");
-        proof_identity(&mut identity_client, mqtt_client, msg).await?;
+        proof_identity(&mut identity_client, &mut mqtt_client, msg).await?;
     // Thing should verify received DID
     } else if !msg.proof && !is_thing {
         info!("Verify Participant's Identity");
@@ -172,10 +192,6 @@ async fn verify_identity(
                 update_identity(&db_client, &response.did, true)?;
             }
         };
-    } else {
-        // Not Verified, make Identity Unverifiable
-        // ToDo Remove From Streams
-        update_identity_unverifiable(&db_client, &response.did)?;
     }
     return Ok(0);
 }
@@ -224,8 +240,8 @@ async fn add_subscriber(
     channel_key: &str,
     thing_key: &str,
 ) -> Result<u32, String> {
-    info!("Subscription Link Found, Adding new Subsriber");
-    match stream_client
+    info!("ENV: {} = {}", ENV_CHANNEL_KEY, &channel_key);
+    let response = match stream_client
         .add_subscriber(tonic::Request::new(IotaStreamsRequest {
             id: author_id.to_string(),
             link: sub_link.to_string(),
@@ -233,38 +249,45 @@ async fn add_subscriber(
         }))
         .await
     {
-        Ok(res) => {
-            let response = res.into_inner();
-            // Get Channel ID
-            let channel = get_channel(&db_client, &channel_key)?;
-            // Get Thing ID
-            let thing = get_thing(&db_client, &thing_key)?;
-            // Get own DID
-            let identity = get_identification(&db_client, thing.id)?;
-            // Send Keyload over MQTT
-            let payload = serialize_msg(&enc::Streams {
-                announcement_link: "".to_string(),
-                subscription_link: "".to_string(),
-                keyload_link: response.link.clone(),
-                did: identity.did,
-                vc: match identity.vc {
-                    Some(r) => r,
-                    None => "".to_string(),
-                },
-            });
-            info!("Send Keyload over MQTT");
-            helper_send_mqtt(mqtt_client, payload, TOPIC_STREAM).await?;
-            // Save Keyload Link
-            match db::update_stream(&db_client, channel.id, "keyload", &response.link) {
-                Ok(_) => {
-                    info!("Updated Stream Entry with Keyload");
-                    return Ok(0);
-                }
-                Err(_) => return Err(format!("Unable to Update Streams Entry")),
-            };
-        }
+        Ok(res) => res.into_inner(),
         Err(e) => return Err(format!("Error Adding Subscriber: {}", e)),
     };
+    // Get number of subscribers
+    let channel = get_channel(&db_client, channel_key)?;
+    let num_subscribers = match db::select_stream(&db_client, channel.id) {
+        Ok(r) => match r.num_subs {
+            Some(r) => r + 1,
+            None => return Err("Unable to Get Number of Subscribers".to_string()),
+        },
+        Err(e) => return Err(format!("Unable to Select Streams Entry: {}", e)),
+    };
+    update_streams_entry(&db_client, "", num_subscribers, "num_subs", channel.id)?;
+    if num_subscribers != TOTAL_NUM_SUBSCRIBER {
+        info!("Number of Subscribers: {}", num_subscribers);
+        return Ok(0);
+    }
+    // Get Channel ID
+    let channel = get_channel(&db_client, &channel_key)?;
+    // Get Thing ID
+    let thing = get_thing(&db_client, &thing_key)?;
+    // Get own DID
+    let identity = get_identification(&db_client, thing.id)?;
+    // Send Keyload over MQTT
+    let payload = serialize_msg(&enc::Streams {
+        announcement_link: "".to_string(),
+        subscription_link: "".to_string(),
+        keyload_link: response.link.clone(),
+        did: identity.did,
+        vc: match identity.vc {
+            Some(r) => r,
+            None => "".to_string(),
+        },
+    });
+    info!("Send Keyload over MQTT");
+    helper_send_mqtt(mqtt_client, payload, TOPIC_STREAM).await?;
+    // Save Keyload Link
+    update_streams_entry(&db_client, &response.link, 0, "keyload", channel.id)?;
+    Ok(0)
 }
 
 async fn proof_identity(

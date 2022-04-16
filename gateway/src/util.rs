@@ -19,6 +19,20 @@ pub fn serialize_msg<T: prost::Message>(msg: &T) -> Vec<u8> {
     buf
 }
 
+pub fn update_streams_entry(
+    db_client: &diesel::SqliteConnection,
+    link: &str,
+    num_subs: i32,
+    query: &str,
+    channel_id: i32,
+) -> Result<(), String> {
+    match db::update_stream(db_client, channel_id, query, link, num_subs) {
+        Ok(_) => info!("Update {} to {}", query, link),
+        Err(_) => return Err(format!("Unable to Update {} Entry to {}", query, link)),
+    };
+    Ok(())
+}
+
 pub async fn send_mqtt_message(
     client: &mut MqttOperatorClient<tonic::transport::Channel>,
     payload: Vec<u8>,
