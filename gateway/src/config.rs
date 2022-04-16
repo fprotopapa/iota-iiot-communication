@@ -10,12 +10,12 @@ pub const TOPIC_STREAM: &str = "stream";
 pub const TOPIC_COMMAND: &str = "command";
 // Gateway
 // Number of Subscribers Expected
-pub const TOTAL_NUM_SUBSCRIBER: i32 = 2;
 pub const MQTT_SOCKET: &str = "[::1]:50054";
 /// Default Streams Service GRPC Socket
 pub const STREAMS_SOCKET: &str = "[::1]:50052";
 /// Default Identity Service GRPC Socket
 pub const IDENTITY_SOCKET: &str = "[::1]:50053";
+pub const ENV_TOTAL_NUM_SUBSCRIBER: &str = "NUM_SUBSCRIBER";
 pub const ENV_DEVICE_NAME: &str = "DEVICE_NAME";
 pub const ENV_DEVICE_TYPE: &str = "DEVICE_TYPE";
 pub const ENV_DEVICE_ID: &str = "DEVICE_ID";

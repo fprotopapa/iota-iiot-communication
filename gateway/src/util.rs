@@ -1,6 +1,8 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use std::env;
+use std::fmt::Debug;
+use std::str::FromStr;
 
 use crate::config::{
     ENV_CHANNEL_KEY, ENV_THING_KEY, ENV_THING_PWD, IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET,
@@ -17,6 +19,15 @@ pub fn serialize_msg<T: prost::Message>(msg: &T) -> Vec<u8> {
     buf.reserve(msg.encoded_len());
     msg.encode(&mut buf).unwrap();
     buf
+}
+
+pub fn parse_env<T>(env_var_name: &str) -> T
+where
+    T: FromStr,
+    T::Err: Debug,
+{
+    let var = env::var(env_var_name).unwrap();
+    var.parse().unwrap()
 }
 
 pub fn update_streams_entry(

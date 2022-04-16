@@ -5,8 +5,8 @@ use std::env;
 use std::io::Cursor;
 
 use crate::config::{
-    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY,
-    TOPIC_SETTING, TOPIC_STREAM, TOTAL_NUM_SUBSCRIBER,
+    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, ENV_TOTAL_NUM_SUBSCRIBER, TOPIC_COMMAND,
+    TOPIC_DID, TOPIC_IDENTITY, TOPIC_SETTING, TOPIC_STREAM,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -19,7 +19,7 @@ use crate::models::Identity;
 use crate::mqtt_encoder as enc;
 use crate::util::{
     connect_identity, connect_mqtt, connect_streams, get_channel, get_identification, get_thing,
-    helper_send_mqtt, serialize_msg, update_streams_entry,
+    helper_send_mqtt, parse_env, serialize_msg, update_streams_entry,
 };
 use std::fs;
 use std::path::Path;
@@ -262,7 +262,8 @@ async fn add_subscriber(
         Err(e) => return Err(format!("Unable to Select Streams Entry: {}", e)),
     };
     update_streams_entry(&db_client, "", num_subscribers, "num_subs", channel.id)?;
-    if num_subscribers != TOTAL_NUM_SUBSCRIBER {
+    let total_num_subscribers = parse_env::<i32>(ENV_TOTAL_NUM_SUBSCRIBER);
+    if num_subscribers != total_num_subscribers {
         info!("Number of Subscribers: {}", num_subscribers);
         return Ok(0);
     }
