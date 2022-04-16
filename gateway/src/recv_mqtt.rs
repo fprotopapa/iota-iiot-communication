@@ -241,7 +241,7 @@ async fn add_subscriber(
     thing_key: &str,
 ) -> Result<u32, String> {
     info!("ENV: {} = {}", ENV_CHANNEL_KEY, &channel_key);
-    let response = match stream_client
+    match stream_client
         .add_subscriber(tonic::Request::new(IotaStreamsRequest {
             id: author_id.to_string(),
             link: sub_link.to_string(),
@@ -272,6 +272,18 @@ async fn add_subscriber(
     let thing = get_thing(&db_client, &thing_key)?;
     // Get own DID
     let identity = get_identification(&db_client, thing.id)?;
+    // Generate Keyload
+    let response = match stream_client
+        .create_keyload(tonic::Request::new(IotaStreamsRequest {
+            id: author_id.to_string(),
+            link: "".to_string(),
+            msg_type: 7, //  CreateKeyload
+        }))
+        .await
+    {
+        Ok(res) => res.into_inner(),
+        Err(e) => return Err(format!("Unable to Create Keyload Link: {}", e)),
+    };
     // Send Keyload over MQTT
     let payload = serialize_msg(&enc::Streams {
         announcement_link: "".to_string(),
