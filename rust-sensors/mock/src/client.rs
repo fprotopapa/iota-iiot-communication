@@ -12,20 +12,22 @@ use tokio::time::{sleep, Duration};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    info!("Mock Client");
+    info!("Start Mock Client");
     let cfg = load_config_file();
     let mut client = adapter::connect_sensor_adapter_client(&cfg.grpc.socket).await?;
     loop {
         sleep(Duration::from_millis(cfg.mock.delay_ms)).await;
         let temp_data = sim_temperature().await;
-        let response = adapter::send_sensor_data(&mut client, temp_data).await?;
-        println!("Response T-Sensor: {}", response.status);
-        println!("{}", "-".repeat(20));
+        match adapter::send_sensor_data(&mut client, temp_data).await {
+            Ok(r) => info!("Response T-Sensor: {}", r.status),
+            Err(e) => error!("Unable to Send Data: {}", e),
+        };
         sleep(Duration::from_millis(cfg.mock.delay_ms)).await;
         let humid_data = sim_humidity().await;
-        let response = adapter::send_sensor_data(&mut client, humid_data).await?;
-        println!("Response H-Sensor: {}", response.status);
-        println!("{}", "-".repeat(20));
+        match adapter::send_sensor_data(&mut client, humid_data).await {
+            Ok(r) => info!("Response H-Sensor: {}", r.status),
+            Err(e) => error!("Unable to Send Data: {}", e),
+        };
     }
 }
 /// Simulate Temperature Sensor

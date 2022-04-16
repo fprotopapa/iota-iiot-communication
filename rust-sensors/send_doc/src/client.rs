@@ -11,11 +11,12 @@ use tokio::time::{sleep, Duration};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    info!("SAP Client");
+    info!("Start SAP Client");
     let cfg = load_config_file();
     let mut client = adapter::connect_sensor_adapter_client(&cfg.grpc.socket).await?;
     sleep(Duration::from_millis(10000)).await;
     let doc = get_cargo_doc("WOT-PW123").await;
+    info!("Send License Plate Information");
     let _ = adapter::send_sensor_data(&mut client, doc).await?;
     Ok(())
 }

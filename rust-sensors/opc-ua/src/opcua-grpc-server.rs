@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    info!("OPC-UA Server");
+    info!("Start OPC-UA Server");
     let cfg = load_config_file();
     let (service, rx) = adapter::SensorAdapterService::new(DEFAULT_BUFFER_SIZE);
     let sensor_worker = sensor_state_machine(rx);
@@ -24,8 +24,7 @@ async fn sensor_state_machine(mut rx: mpsc::Receiver<sensor_grpc_adapter::Server
     loop {
         let request = match rx.recv().await {
             Some(msg) => {
-                println!("Data: {:?}", msg.data);
-                println!("{}", "-".repeat(20));
+                info!("Data: {:?}", msg.data);
                 msg
             }
             None => panic!("Received No Data"),

@@ -47,7 +47,7 @@ impl Encoder<String> for LineCodec {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    info!("BLE Sensor");
+    info!("Start BLE Client");
     let cfg = load_config_file();
     // Initialize Connection
     let mut port = tokio_serial::new(cfg.ble.tty, 9600).open_native_async()?;
@@ -61,15 +61,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match reader.next().await {
             Some(line_result) => {
                 let data = line_result.expect("Failed to read line");
-                println!("Message: {}", data);
+                info!("Message: {}", data);
                 let json_obj: Value = serde_json::from_str(&data)?;
-                println!("Serial Read: {}", json_obj["temperature"]);
+                info!("Serial Read: {}", json_obj["temperature"]);
                 let msg = make_temperature_message(&json_obj["temperature"].to_string()).await;
-                let response = adapter::send_sensor_data(&mut client, msg).await?;
-                println!("Response T-Sensor: {}", response.status);
-                println!("{}", "-".repeat(20));
+                match adapter::send_sensor_data(&mut client, msg).await {
+                    Ok(r) => info!("Response T-Sensor: {}", r.status),
+                    Err(e) => error!("Unable to Send Data: {}", e),
+                };
             }
-            None => println!(""),
+            None => (),
         }
         sleep(Duration::from_millis(cfg.ble.delay_ms)).await;
     }

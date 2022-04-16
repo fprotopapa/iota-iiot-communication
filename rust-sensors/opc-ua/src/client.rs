@@ -17,7 +17,7 @@ use opcua_client::prelude::*;
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     env_logger::init();
-    info!("OPC-UA Client");
+    info!("Start OPC-UA Client");
     let cfg = load_config_file();
     let endpoint_id = &cfg.opcua.endpoint;
     // Enter Main Thread, Start GRPC Communication
@@ -26,7 +26,7 @@ async fn main() -> Result<(), ()> {
         // Set-Up Connection
         let mut client = match adapter::connect_sensor_adapter_client(&cfg.grpc.socket).await {
             Ok(r) => r,
-            Err(_e) => panic!("Unable to Create GRPC Client"),
+            Err(e) => panic!("Unable to Create GRPC Client: {}", e),
         };
         // Wait for Message from Callback and Process
         loop {
@@ -53,7 +53,7 @@ async fn main() -> Result<(), ()> {
     let ns = 2;
     if let Ok(session) = client.connect_to_endpoint_id(endpoint_id) {
         let _ = subscription_loop(session, tx, ns).map_err(|err| {
-            println!("ERROR: Got an error while performing action - {}", err);
+            error!("ERROR: Got an error while performing action - {}", err);
         });
     }
     Ok(())
@@ -65,7 +65,7 @@ fn subscription_loop(
     ns: u16,
 ) -> Result<(), StatusCode> {
     // Create a subscription
-    println!("Creating subscription");
+    info!("Creating subscription");
     // This scope is important - we don't want to session to be locked when the code hits the
     // loop below
     {
@@ -81,7 +81,7 @@ fn subscription_loop(
             0,
             true,
             DataChangeCallback::new(move |items| {
-                println!("Data change from server:");
+                info!("Data change from server:");
                 let tx = tx.lock().unwrap();
                 items.iter().for_each(|item| {
                     let node_id = item.item_to_monitor().node_id.clone();
@@ -90,7 +90,7 @@ fn subscription_loop(
                 });
             }),
         )?;
-        println!("Created a subscription with id = {}", subscription_id);
+        info!("Created a subscription with id = {}", subscription_id);
         // Create some monitored items
         let items_to_create: Vec<MonitoredItemCreateRequest> = ["t1", "t2", "t3", "t4"]
             .iter()
@@ -111,7 +111,7 @@ fn subscription_loop(
 fn build_message(id: node_id::Identifier, namespace: u16, value: &str) -> adapter::SensorData {
     // Build Identifier
     let identifier = format!("{}{}", namespace, id);
-    println!("ID: {}, Value: {}", &identifier, &value);
+    info!("ID: {}, Value: {}", &identifier, &value);
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("Error Getting Time");
