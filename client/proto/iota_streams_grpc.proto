@@ -1,0 +1,59 @@
+syntax = "proto3";
+package iota_streams_grpc;
+
+service IotaStreamer {
+  // Iota Streams calls
+  rpc CreateNewAuthor (IotaStreamsRequest) returns (IotaStreamsReply);
+  rpc CreateNewSubscriber (IotaStreamsRequest) returns (IotaStreamsReply);
+  rpc AddSubscriber (IotaStreamsRequest) returns (IotaStreamsReply);
+  rpc ReceiveKeyload (IotaStreamsRequest) returns (IotaStreamsReply);
+  rpc SendMessage (IotaStreamsSendMessageRequest) returns (IotaStreamsReply);
+  rpc ReceiveMessages (IotaStreamsRequest) returns (IotaStreamsRecvMessagesReply);
+  rpc CreateKeyload (IotaStreamsRequest) returns (IotaStreamsReply);
+}
+//  Message type 
+//  -----------------------
+//  CreateNewAuthor:      1
+//  CreateNewSubscriber:  2
+//  AddSubscriber:        3
+//  ReceiveKeyload:       4
+//  SendMessage:          5
+//  ReceiveMessages:      6
+//  CreateKeyload:        7
+//  -----------------------
+message IotaStreamsRequest {
+  // Request message for Iota Streams
+  string id = 1;
+  uint32 msg_type = 2;
+  string link = 3;
+}
+
+message IotaStreamsSendMessageRequest {
+  // Request message for sending messages over tangle
+  string id = 1;
+  uint32 msg_type = 2;
+  string message_link = 3;
+  uint32 message_length = 4;
+  string message = 5;
+}
+
+message IotaStreamsReply {
+  // Reply message for Iota Streams
+  string id = 1;
+  uint32 msg_type = 2;
+  string status = 3;
+  int32 code = 4;
+  string link = 5;
+}
+
+message IotaStreamsRecvMessagesReply {
+  // Reply message for receiving messages over tangle
+  string id = 1;
+  uint32 msg_type = 2;
+  string status = 3;
+  int32 code = 4;
+  string link = 5;
+  uint32 received_messages = 6;
+  repeated string messages = 7;
+}
+
