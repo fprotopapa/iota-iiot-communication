@@ -58,6 +58,27 @@ pub fn select_sensor_by_name(
     };
     Ok(entry)
 }
+/// Select Sensor Entry with timestamp and sensor ID
+pub fn select_sensor_entry_by_time_and_id(
+    conn: &SqliteConnection,
+    sensor_identifier: i32,
+    timestamp: i64,
+) -> Result<Vec<models::SensorData>, i32> {
+    use self::sensor_data::dsl::*;
+    let query = sensor_data
+        .filter(sensor_id.eq(sensor_identifier))
+        .filter(sensor_time.eq(timestamp))
+        .limit(1)
+        .get_results::<models::SensorData>(conn);
+    let result = match query {
+        Ok(r) => r,
+        Err(e) => {
+            error!("{}", e);
+            return Err(-1);
+        }
+    };
+    Ok(result)
+}
 /// Select Sensor Entry
 pub fn select_sensor_entry(
     conn: &SqliteConnection,

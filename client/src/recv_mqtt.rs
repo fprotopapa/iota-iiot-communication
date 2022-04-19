@@ -5,15 +5,14 @@ use std::env;
 use std::io::Cursor;
 
 use crate::config::{
-    ENV_CHANNELS_KEY, ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY,
-    TOPIC_SENSOR_VALUE, TOPIC_SETTING, TOPIC_STREAM,
+    ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY, TOPIC_SENSOR_VALUE,
+    TOPIC_SETTING, TOPIC_STREAM,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
 use crate::grpc_identity::IotaIdentityRequest;
 use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
 use crate::grpc_mqtt::{MqttMsgsReply, MqttRequest};
-use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
 use crate::grpc_streams::IotaStreamsRequest;
 use crate::models::Identity;
 use crate::mqtt_encoder as enc;
@@ -31,12 +30,12 @@ pub async fn receive_mqtt_messages(channel_key: &str) -> Result<String, String> 
     let mut response = receive_messages(&mut mqtt_client).await?;
     for (payload, topic) in response.messages.iter_mut().zip(response.topics) {
         let result = match topic.as_str() {
-            TOPIC_DID => mqtt_identity(payload.to_vec(), channel_key).await, // Should be the same
-            TOPIC_STREAM => mqtt_streams(payload.to_vec(), channel_key).await, // Get Ann_link, send subscription
-            TOPIC_SETTING => mqtt_settings(payload.to_vec()).await,            // same
-            TOPIC_COMMAND => mqtt_command(payload.to_vec()).await,             // same
-            TOPIC_IDENTITY => mqtt_first_verification(payload.to_vec()).await, // same
-            TOPIC_SENSOR_VALUE => mqtt_save_sensor_data(payload.to_vec()).await, // Save Data to DB and Compare with Tangle Values
+            TOPIC_DID => mqtt_identity(payload.to_vec(), channel_key).await,
+            TOPIC_STREAM => mqtt_streams(payload.to_vec(), channel_key).await,
+            TOPIC_SETTING => mqtt_settings(payload.to_vec()).await,
+            TOPIC_COMMAND => mqtt_command(payload.to_vec()).await,
+            TOPIC_IDENTITY => mqtt_first_verification(payload.to_vec()).await,
+            TOPIC_SENSOR_VALUE => mqtt_save_sensor_data(payload.to_vec(), channel_key).await, // ToDO Save Data to DB and Compare with Tangle Values
             e => Err(format!("Topic {} not Found", e)),
         };
         match result {
@@ -47,7 +46,16 @@ pub async fn receive_mqtt_messages(channel_key: &str) -> Result<String, String> 
     Ok("Exit with Success: receive_mqtt_messages()".to_string())
 }
 
-pub async fn mqtt_save_sensor_data(payload: Vec<u8>) -> Result<u32, String> {
+pub async fn mqtt_save_sensor_data(payload: Vec<u8>, channel_key: &str) -> Result<u32, String> {
+    info!("--- mqtt_save_sensor_data() ---");
+    // Decode Payload
+    let msg = match enc::Sensor::decode(&mut Cursor::new(payload)) {
+        Ok(res) => res,
+        Err(e) => return Err(format!("Unable to Decode Payload: {}", e)),
+    };
+    let db_client = db::establish_connection();
+    let channel = get_channel(&db_client, channel_key)?;
+    save_sensor_data(&db_client, channel.id, msg);
     Ok(0)
 }
 
@@ -78,10 +86,10 @@ pub async fn mqtt_first_verification(payload: Vec<u8>) -> Result<u32, String> {
     Ok(0)
 }
 
-pub async fn mqtt_streams(payload: Vec<u8>, channel_id: &str) -> Result<u32, String> {
+pub async fn mqtt_streams(payload: Vec<u8>, channel_key: &str) -> Result<u32, String> {
     info!("--- mqtt_streams() ---");
-    let author_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
-    info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
+    let sub_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
+    info!("ENV: {} = {}", ENV_DEVICE_ID, &sub_id);
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
     info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Decode Payload
@@ -89,10 +97,7 @@ pub async fn mqtt_streams(payload: Vec<u8>, channel_id: &str) -> Result<u32, Str
         Ok(res) => res,
         Err(e) => return Err(format!("Unable to Decode Payload: {}", e)),
     };
-    // Connect to MQTT Service
-    let mut mqtt_client = connect_mqtt().await?;
-    // Connect to IOTA Streams Service
-    let mut stream_client = connect_streams().await?;
+
     // Connect to Database
     let db_client = db::establish_connection();
     // Verify that Message wasn't sent from this Thing
@@ -109,18 +114,19 @@ pub async fn mqtt_streams(payload: Vec<u8>, channel_id: &str) -> Result<u32, Str
         Some(r) => r,
         None => false,
     };
-    // if !msg.subscription_link.is_empty() && is_verified {
-    //     add_subscriber(
-    //         &db_client,
-    //         &mut stream_client,
-    //         &mut mqtt_client,
-    //         &msg.subscription_link,
-    //         &author_id,
-    //         &channel_key,
-    //         &thing_key,
-    //     )
-    //     .await?;
-    // }
+
+    if !msg.announcement_link.is_empty() && is_verified {
+        make_subscriber(
+            &db_client,
+            &sub_id,
+            &msg.announcement_link,
+            channel_key,
+            &thing_key,
+        )
+        .await?;
+    } else if !msg.keyload_link.is_empty() && is_verified {
+        add_keyload(&db_client, &sub_id, &msg.keyload_link, channel_key).await?;
+    }
     info!("Streams Message Processed");
     Ok(0)
 }
@@ -160,6 +166,79 @@ pub async fn mqtt_identity(payload: Vec<u8>, channel_id: &str) -> Result<u32, St
         info!("Verify Participant's Identity");
         verify_identity(&mut identity_client, &db_client, msg).await?;
     }
+    Ok(0)
+}
+
+pub fn save_sensor_data(
+    db_client: &diesel::SqliteConnection,
+    channel_id: i32,
+    msg: enc::Sensor,
+) -> Result<u32, String> {
+    match db::create_sensor_type(&db_client, &msg.typ, &msg.unit) {
+        Ok(_) => info!("Sensor Type Entry Created for Sensor: {}", &msg.typ),
+        Err(e) => {
+            error!("Error Creating Sensor Type Entry for : {}", e)
+        }
+    };
+    let sensor_type = match db::select_sensor_type_by_desc(&db_client, &msg.typ) {
+        Ok(res) => {
+            info!("Sensor Type Entry Selected");
+            res
+        }
+        Err(e) => {
+            return Err(format!("Unable to Select Sensor Type Entry: {}", e));
+        }
+    };
+    match db::create_sensor(
+        &db_client,
+        db::SensorEntry {
+            channel_id: channel_id,
+            sensor_types_id: sensor_type.id,
+            sensor_id: msg.sensor_id.clone(),
+            sensor_name: msg.name.clone(),
+        },
+    ) {
+        Ok(_) => info!(
+            "Sensor Entry Created for ID: {}, Name: {}",
+            &msg.sensor_id, &msg.name
+        ),
+        Err(e) => error!(
+            "Error Creating Sensor Entry for ID: {}, Name: {}: {}",
+            &msg.sensor_id, &msg.name, e
+        ),
+    };
+    let sensor = match db::select_sensor_by_name(&db_client, &msg.sensor_id) {
+        Ok(r) => {
+            info!("Sensor Entry Selected");
+            r
+        }
+        Err(e) => return Err(format!("Unable to Select Sensor Entry: {}", e)),
+    };
+    match db::create_sensor_data(
+        &db_client,
+        db::SensorDataEntry {
+            sensor_id: sensor.id,
+            sensor_value: msg.value,
+            sensor_time: msg.timestamp,
+            mqtt: true,
+            iota: false,
+            verified: false,
+        },
+    ) {
+        Ok(_) => {
+            info!("New Sensor Data Entry Created");
+            return Ok(0);
+        }
+        Err(e) => error!("Unable to Create Sensor Data Entry: {}", e),
+    };
+    let data = match db::select_sensor_entry_by_time_and_id(&db_client, sensor.id, msg.timestamp) {
+        Ok(r) => {
+            info!("Found Sensor Data Entry");
+            r
+        }
+        Err(e) => return Err(format!("Unable to Select Sensor Data Entry: {}", e)),
+    };
+    // ToDo Compare Received with found and Update DB
     Ok(0)
 }
 
@@ -233,76 +312,93 @@ pub async fn mqtt_command(payload: Vec<u8>) -> Result<u32, String> {
     Ok(0)
 }
 
-// async fn add_subscriber(
-//     db_client: &diesel::SqliteConnection,
-//     stream_client: &mut IotaStreamerClient<tonic::transport::Channel>,
-//     mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
-//     sub_link: &str,
-//     author_id: &str,
-//     channel_key: &str,
-//     thing_key: &str,
-// ) -> Result<u32, String> {
-//     info!("ENV: {} = {}", ENV_CHANNEL_KEY, &channel_key);
-//     match stream_client
-//         .add_subscriber(tonic::Request::new(IotaStreamsRequest {
-//             id: author_id.to_string(),
-//             link: sub_link.to_string(),
-//             msg_type: 2, //  CreateNewSubscriber
-//         }))
-//         .await
-//     {
-//         Ok(res) => res.into_inner(),
-//         Err(e) => return Err(format!("Error Adding Subscriber: {}", e)),
-//     };
-//     // Get number of subscribers
-//     let channel = get_channel(&db_client, channel_key)?;
-//     let num_subscribers = match db::select_stream(&db_client, channel.id) {
-//         Ok(r) => match r.num_subs {
-//             Some(r) => r + 1,
-//             None => return Err("Unable to Get Number of Subscribers".to_string()),
-//         },
-//         Err(e) => return Err(format!("Unable to Select Streams Entry: {}", e)),
-//     };
-//     update_streams_entry(&db_client, "", num_subscribers, "num_subs", channel.id)?;
-//     if num_subscribers != TOTAL_NUM_SUBSCRIBER {
-//         info!("Number of Subscribers: {}", num_subscribers);
-//         return Ok(0);
-//     }
-//     // Get Channel ID
-//     let channel = get_channel(&db_client, &channel_key)?;
-//     // Get Thing ID
-//     let thing = get_thing(&db_client, &thing_key)?;
-//     // Get own DID
-//     let identity = get_identification(&db_client, thing.id)?;
-//     // Generate Keyload
-//     let response = match stream_client
-//         .create_keyload(tonic::Request::new(IotaStreamsRequest {
-//             id: author_id.to_string(),
-//             link: "".to_string(),
-//             msg_type: 7, //  CreateKeyload
-//         }))
-//         .await
-//     {
-//         Ok(res) => res.into_inner(),
-//         Err(e) => return Err(format!("Unable to Create Keyload Link: {}", e)),
-//     };
-//     // Send Keyload over MQTT
-//     let payload = serialize_msg(&enc::Streams {
-//         announcement_link: "".to_string(),
-//         subscription_link: "".to_string(),
-//         keyload_link: response.link.clone(),
-//         did: identity.did,
-//         vc: match identity.vc {
-//             Some(r) => r,
-//             None => "".to_string(),
-//         },
-//     });
-//     info!("Send Keyload over MQTT");
-//     helper_send_mqtt(mqtt_client, payload, TOPIC_STREAM).await?;
-//     // Save Keyload Link
-//     update_streams_entry(&db_client, &response.link, 0, "keyload", channel.id)?;
-//     Ok(0)
-// }
+pub async fn add_keyload(
+    db_client: &diesel::SqliteConnection,
+    device_id: &str,
+    key_link: &str,
+    channel_key: &str,
+) -> Result<u32, String> {
+    // Connect to IOTA Streams Service
+    let mut stream_client = connect_streams().await?;
+    // Add Keyload
+    let msg = IotaStreamsRequest {
+        id: device_id.to_string(),
+        msg_type: 4,
+        link: key_link.to_string(),
+    };
+    match stream_client
+        .receive_keyload(tonic::Request::new(msg))
+        .await
+    {
+        Ok(res) => {
+            let response = res.into_inner();
+            if response.code != 0 {
+                return Err("Unable to Add Keyload to Subscriber".to_string());
+            }
+        }
+        Err(e) => return Err(format!("Unable to Add Keyload to Subscriber: {}", e)),
+    };
+    // Save Sub Link
+    let channel = get_channel(&db_client, &channel_key)?;
+    update_streams_entry(db_client, key_link, 0, "keyload", channel.id)?;
+    Ok(0)
+}
+
+pub async fn make_subscriber(
+    db_client: &diesel::SqliteConnection,
+    device_id: &str,
+    ann_link: &str,
+    channel_key: &str,
+    thing_key: &str,
+) -> Result<u32, String> {
+    // Connect to MQTT Service
+    let mut mqtt_client = connect_mqtt().await?;
+    // Connect to IOTA Streams Service
+    let mut stream_client = connect_streams().await?;
+    // // Save Ann Link
+    let channel = get_channel(&db_client, &channel_key)?;
+    update_streams_entry(db_client, ann_link, 0, "announcement", channel.id)?;
+    // Create Subscriber
+    let msg = IotaStreamsRequest {
+        id: device_id.to_string(),
+        msg_type: 2,
+        link: ann_link.to_string(),
+    };
+    let sublink = match stream_client
+        .create_new_subscriber(tonic::Request::new(msg))
+        .await
+    {
+        Ok(res) => {
+            let response = res.into_inner();
+            if response.code == 0 {
+                response.link
+            } else {
+                return Err("Unable to Create Subscriber".to_string());
+            }
+        }
+        Err(e) => return Err(format!("Unable to Create Subscriber: {}", e)),
+    };
+    // Get Thing ID
+    let thing = get_thing(&db_client, &thing_key)?;
+    // Get own DID
+    let identity = get_identification(&db_client, thing.id)?;
+    // Send Sub Link over MQTT
+    let payload = serialize_msg(&enc::Streams {
+        announcement_link: "".to_string(),
+        subscription_link: sublink.clone(),
+        keyload_link: "".to_string(),
+        did: identity.did,
+        vc: match identity.vc {
+            Some(r) => r,
+            None => "".to_string(),
+        },
+    });
+    info!("Send Subscription Link over MQTT");
+    helper_send_mqtt(&mut mqtt_client, payload, TOPIC_STREAM, channel_key).await?;
+    // Save Sub Link
+    update_streams_entry(db_client, &sublink, 0, "subscription", channel.id)?;
+    Ok(0)
+}
 
 async fn proof_identity(
     identity_client: &mut IotaIdentifierClient<tonic::transport::Channel>,

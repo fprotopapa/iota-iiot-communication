@@ -8,6 +8,7 @@ pub const TOPIC_SETTING: &str = "settings";
 pub const TOPIC_IDENTITY: &str = "identity";
 pub const TOPIC_STREAM: &str = "stream";
 pub const TOPIC_COMMAND: &str = "command";
+pub const PUBLIC_CHANNEL_ID: &str = "public_stream";
 // Gateway
 // Number of Subscribers Expected
 pub const MQTT_SOCKET: &str = "[::1]:50054";

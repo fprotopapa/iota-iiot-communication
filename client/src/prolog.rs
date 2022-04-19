@@ -4,7 +4,7 @@ use std::env;
 
 use crate::config::{
     ENV_ANNLINK_PUBLIC, ENV_DEVICE_ID, ENV_DEVICE_NAME, ENV_DEVICE_TYPE, ENV_THING_KEY,
-    IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET, TOPIC_IDENTITY,
+    IDENTITY_SOCKET, MQTT_SOCKET, PUBLIC_CHANNEL_ID, STREAMS_SOCKET, TOPIC_IDENTITY,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -48,8 +48,6 @@ pub async fn init() -> Result<bool, bool> {
     };
     // Get Thing ID
     let thing = get_thing(&db_client, &thing_key)?;
-    // Get Channel ID for Public Stream Channel
-    let channel_id = channel_ids[0].clone();
     for channel in channel_ids {
         // Create Channel Entry
         match db::create_channel(&db_client, thing.id, &channel) {
@@ -74,9 +72,9 @@ pub async fn init() -> Result<bool, bool> {
     info!("Make External IP Known");
     let ip = get_external_ip().await?;
     update_ip_address(&db_client, &ip, thing.id)?;
-    // Get Channel ID
-    let channel = get_channel(&db_client, &channel_id)?;
     // Create Public Streams Channel
+    // Get Channel ID
+    let channel = get_channel(&db_client, PUBLIC_CHANNEL_ID)?;
     init_streams(&db_client, &mut stream_client, channel.id, &author_id).await?;
     info!("Gateway Successful Initialized");
 
