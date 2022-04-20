@@ -5,8 +5,8 @@ use std::env;
 use std::io::Cursor;
 
 use crate::config::{
-    ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY, TOPIC_SENSOR_VALUE,
-    TOPIC_SETTING, TOPIC_STREAM,
+    ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY, TOPIC_SENSOR_VALUE, TOPIC_SETTING,
+    TOPIC_STREAM,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -14,14 +14,27 @@ use crate::grpc_identity::IotaIdentityRequest;
 use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
 use crate::grpc_mqtt::{MqttMsgsReply, MqttRequest};
 use crate::grpc_streams::IotaStreamsRequest;
-use crate::models::Identity;
+use crate::models::{Identity, Sensor, SensorData, SensorType};
 use crate::mqtt_encoder as enc;
 use crate::util::{
     connect_identity, connect_mqtt, connect_streams, get_channel, get_identification, get_thing,
     helper_send_mqtt, serialize_msg, update_streams_entry,
 };
+use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+
+#[derive(Serialize, Deserialize, Clone)]
+struct MessageFromJson {
+    did: String,
+    verifiable_credential: String,
+    sensor_id: String,
+    sensor_name: String,
+    sensor_type: String,
+    value: String,
+    unit: String,
+    timestamp: i64,
+}
 
 pub async fn receive_mqtt_messages(channel_key: &str) -> Result<String, String> {
     info!("--- receive_mqtt_messages() ---");
@@ -35,7 +48,7 @@ pub async fn receive_mqtt_messages(channel_key: &str) -> Result<String, String> 
             TOPIC_SETTING => mqtt_settings(payload.to_vec()).await,
             TOPIC_COMMAND => mqtt_command(payload.to_vec()).await,
             TOPIC_IDENTITY => mqtt_first_verification(payload.to_vec()).await,
-            TOPIC_SENSOR_VALUE => mqtt_save_sensor_data(payload.to_vec(), channel_key).await, // ToDO Save Data to DB and Compare with Tangle Values
+            TOPIC_SENSOR_VALUE => mqtt_save_sensor_data(payload.to_vec(), channel_key).await,
             e => Err(format!("Topic {} not Found", e)),
         };
         match result {
@@ -55,7 +68,22 @@ pub async fn mqtt_save_sensor_data(payload: Vec<u8>, channel_key: &str) -> Resul
     };
     let db_client = db::establish_connection();
     let channel = get_channel(&db_client, channel_key)?;
-    save_sensor_data(&db_client, channel.id, msg);
+    save_mqtt_sensor_data(&db_client, channel.id, msg)?;
+    let mut streams_client = connect_streams().await?;
+    let msgs = match streams_client
+        .receive_messages(IotaStreamsRequest {
+            id: channel_key.to_string(),
+            link: "".to_string(),
+            msg_type: 6, // ReceiveMessages
+        })
+        .await
+    {
+        Ok(r) => r.into_inner(),
+        Err(e) => return Err(format!("Unable to Receive Messages: {}", e)),
+    };
+    for msg in msgs.messages {
+        save_iota_sensor_data(&db_client, &msg, channel.id).await?;
+    }
     Ok(0)
 }
 
@@ -88,8 +116,8 @@ pub async fn mqtt_first_verification(payload: Vec<u8>) -> Result<u32, String> {
 
 pub async fn mqtt_streams(payload: Vec<u8>, channel_key: &str) -> Result<u32, String> {
     info!("--- mqtt_streams() ---");
-    let sub_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
-    info!("ENV: {} = {}", ENV_DEVICE_ID, &sub_id);
+    let sub_id = channel_key; //env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
+                              //info!("ENV: {} = {}", ENV_DEVICE_ID, &sub_id);
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
     info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Decode Payload
@@ -169,7 +197,7 @@ pub async fn mqtt_identity(payload: Vec<u8>, channel_id: &str) -> Result<u32, St
     Ok(0)
 }
 
-pub fn save_sensor_data(
+pub fn save_mqtt_sensor_data(
     db_client: &diesel::SqliteConnection,
     channel_id: i32,
     msg: enc::Sensor,
@@ -214,14 +242,199 @@ pub fn save_sensor_data(
         }
         Err(e) => return Err(format!("Unable to Select Sensor Entry: {}", e)),
     };
-    match db::create_sensor_data(
+    let data_lst =
+        match db::select_sensor_entry_by_time_and_id(&db_client, sensor.id, msg.timestamp) {
+            Ok(r) => {
+                info!("Found Sensor Data Entry");
+                r
+            }
+            Err(_) => {
+                info!("No Entry Found, Making New Data Entry");
+                make_sensor_data_entry(
+                    &db_client,
+                    sensor.id,
+                    &msg.value,
+                    msg.timestamp,
+                    true,
+                    false,
+                )?;
+                return Ok(0);
+            }
+        };
+    for data in data_lst {
+        let id = data.id;
+        if compare_mqtt_to_db(data, msg.clone(), sensor_type.clone(), sensor.clone()) {
+            match db::update_sensor_entry(&db_client, id, "verified", true) {
+                Ok(_) => {
+                    info!("Data Entry Verified");
+                    return Ok(0);
+                }
+                Err(e) => return Err(format!("Unable to Verify Data Entry: {}", e)),
+            };
+        } else {
+            error!("Unable to Verify Data Entry");
+        }
+    }
+    Ok(0)
+}
+
+async fn save_iota_sensor_data(
+    db_client: &diesel::SqliteConnection,
+    message: &str,
+    channel_id: i32,
+) -> Result<u32, String> {
+    let msg: MessageFromJson = match serde_json::from_str(message) {
+        Ok(r) => r,
+        Err(e) => {
+            return Err(format!("Unable to Parse JSON to Message: {}", e));
+        }
+    };
+    match db::create_sensor_type(&db_client, &msg.sensor_type, &msg.unit) {
+        Ok(_) => info!("Sensor Type Entry Created for Sensor: {}", &msg.sensor_type),
+        Err(e) => {
+            error!("Error Creating Sensor Type Entry for : {}", e)
+        }
+    };
+    let sensor_type = match db::select_sensor_type_by_desc(&db_client, &msg.sensor_type) {
+        Ok(res) => {
+            info!("Sensor Type Entry Selected");
+            res
+        }
+        Err(e) => {
+            return Err(format!("Unable to Select Sensor Type Entry: {}", e));
+        }
+    };
+    match db::create_sensor(
         &db_client,
+        db::SensorEntry {
+            channel_id: channel_id,
+            sensor_types_id: sensor_type.id,
+            sensor_id: msg.sensor_id.clone(),
+            sensor_name: msg.sensor_name.clone(),
+        },
+    ) {
+        Ok(_) => info!(
+            "Sensor Entry Created for ID: {}, Name: {}",
+            &msg.sensor_id, &msg.sensor_name
+        ),
+        Err(e) => error!(
+            "Error Creating Sensor Entry for ID: {}, Name: {}: {}",
+            &msg.sensor_id, &msg.sensor_name, e
+        ),
+    };
+    let sensor = match db::select_sensor_by_name(&db_client, &msg.sensor_id) {
+        Ok(r) => {
+            info!("Sensor Entry Selected");
+            r
+        }
+        Err(e) => return Err(format!("Unable to Select Sensor Entry: {}", e)),
+    };
+    let data_lst =
+        match db::select_sensor_entry_by_time_and_id(&db_client, sensor.id, msg.timestamp) {
+            Ok(r) => {
+                info!("Found Sensor Data Entry");
+                r
+            }
+            Err(_) => {
+                info!("No Entry Found, Making New Data Entry");
+                make_sensor_data_entry(
+                    &db_client,
+                    sensor.id,
+                    &msg.value,
+                    msg.timestamp,
+                    false,
+                    true,
+                )?;
+                return Ok(0);
+            }
+        };
+    for data in data_lst {
+        let id = data.id;
+        if compare_iota_to_db(data, msg.clone(), sensor_type.clone(), sensor.clone()) {
+            match db::update_sensor_entry(&db_client, id, "verified", true) {
+                Ok(_) => {
+                    info!("Data Entry Verified");
+                    return Ok(0);
+                }
+                Err(e) => return Err(format!("Unable to Verify Data Entry: {}", e)),
+            };
+        } else {
+            error!("Unable to Verify Data Entry");
+        }
+    }
+    Ok(0)
+}
+
+fn compare_iota_to_db(
+    db_entry: SensorData,
+    msg: MessageFromJson,
+    sensor_type: SensorType,
+    sensor: Sensor,
+) -> bool {
+    let unit = match sensor_type.unit {
+        Some(r) => r,
+        None => "".to_string(),
+    };
+    let name = match sensor.sensor_name {
+        Some(r) => r,
+        None => "".to_string(),
+    };
+    if msg.sensor_id.eq(&sensor.sensor_id)
+        && msg.sensor_name.eq(&name)
+        && msg.sensor_type.eq(&sensor_type.description)
+        && msg.unit.eq(&unit)
+        && msg.value.eq(&db_entry.sensor_value)
+        && msg.timestamp.eq(&db_entry.sensor_time)
+    {
+        true
+    } else {
+        false
+    }
+}
+
+fn compare_mqtt_to_db(
+    db_entry: SensorData,
+    msg: enc::Sensor,
+    sensor_type: SensorType,
+    sensor: Sensor,
+) -> bool {
+    let unit = match sensor_type.unit {
+        Some(r) => r,
+        None => "".to_string(),
+    };
+    let name = match sensor.sensor_name {
+        Some(r) => r,
+        None => "".to_string(),
+    };
+    if msg.sensor_id.eq(&sensor.sensor_id)
+        && msg.name.eq(&name)
+        && msg.typ.eq(&sensor_type.description)
+        && msg.unit.eq(&unit)
+        && msg.value.eq(&db_entry.sensor_value)
+        && msg.timestamp.eq(&db_entry.sensor_time)
+    {
+        true
+    } else {
+        false
+    }
+}
+
+fn make_sensor_data_entry(
+    db_client: &diesel::SqliteConnection,
+    sensor_id: i32,
+    value: &str,
+    time: i64,
+    is_mqtt: bool,
+    is_iota: bool,
+) -> Result<u32, String> {
+    match db::create_sensor_data(
+        db_client,
         db::SensorDataEntry {
-            sensor_id: sensor.id,
-            sensor_value: msg.value,
-            sensor_time: msg.timestamp,
-            mqtt: true,
-            iota: false,
+            sensor_id: sensor_id,
+            sensor_value: value.to_string(),
+            sensor_time: time,
+            mqtt: is_mqtt,
+            iota: is_iota,
             verified: false,
         },
     ) {
@@ -229,17 +442,8 @@ pub fn save_sensor_data(
             info!("New Sensor Data Entry Created");
             return Ok(0);
         }
-        Err(e) => error!("Unable to Create Sensor Data Entry: {}", e),
+        Err(e) => return Err(format!("Unable to Create Sensor Data Entry: {}", e)),
     };
-    let data = match db::select_sensor_entry_by_time_and_id(&db_client, sensor.id, msg.timestamp) {
-        Ok(r) => {
-            info!("Found Sensor Data Entry");
-            r
-        }
-        Err(e) => return Err(format!("Unable to Select Sensor Data Entry: {}", e)),
-    };
-    // ToDo Compare Received with found and Update DB
-    Ok(0)
 }
 
 async fn verify_identity(

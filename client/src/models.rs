@@ -98,7 +98,7 @@ pub struct NewConfiguration<'a> {
     pub pk_timestamp: i64,
 }
 
-#[derive(Queryable, Debug)]
+#[derive(Queryable, Debug, Clone)]
 pub struct SensorType {
     pub id: i32,
     pub description: String,
@@ -112,7 +112,7 @@ pub struct NewSensorType<'a> {
     pub unit: &'a str,
 }
 
-#[derive(Queryable, Debug)]
+#[derive(Queryable, Debug, Clone)]
 pub struct Sensor {
     pub id: i32,
     pub channel_id: i32,
