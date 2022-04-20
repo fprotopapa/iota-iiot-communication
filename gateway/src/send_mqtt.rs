@@ -81,18 +81,30 @@ pub async fn send_sensor_data() -> Result<String, String> {
             key_link
         }
     };
+    let vc = match identity.vc {
+        Some(r) => r,
+        None => "".to_string(),
+    };
     for val in val_iota {
         let sensor = get_sensor(&db_client, val.sensor_id)?;
         let sensor_type = get_sensor_type(&db_client, sensor.sensor_types_id)?;
+        let name = match sensor.sensor_name {
+            Some(r) => r,
+            None => "".to_string(),
+        };
+        let unit = match sensor_type.unit {
+            Some(r) => r,
+            None => "".to_string(),
+        };
         // Make Payload
         let payload = json!({
             "did": identity.did,
-            "verifiable_credential": identity.vc,
+            "verifiable_credential": vc,
             "sensor_id": sensor.sensor_id,
-            "sensor_name": sensor.sensor_name,
+            "sensor_name": name,
             "sensor_type": sensor_type.description,
             "value": val.sensor_value,
-            "unit": sensor_type.unit,
+            "unit": unit,
             "timestamp": val.sensor_time,
         })
         .to_string();
