@@ -18,6 +18,7 @@ use crate::mqtt_encoder as enc;
 use crate::util::{generate_random_sequence, get_channel_ids, send_mqtt_message, serialize_msg};
 
 pub async fn init() -> Result<bool, bool> {
+    // ToDo: exclude when basic client ?
     let author_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
     info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
     let channel_ids = get_channel_ids();
@@ -75,6 +76,7 @@ pub async fn init() -> Result<bool, bool> {
     // Create Public Streams Channel
     // Get Channel ID
     let channel = get_channel(&db_client, PUBLIC_CHANNEL_ID)?;
+    // ToDo: exclude when basic client
     init_streams(&db_client, &mut stream_client, channel.id, &author_id).await?;
     info!("Gateway Successful Initialized");
 

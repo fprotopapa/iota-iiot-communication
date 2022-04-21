@@ -24,6 +24,7 @@ pub const ENV_CHANNELS_KEY: &str = "CHANNEL_IDS"; // Seperated with ';'
 pub const ENV_THING_KEY: &str = "THING_NAME";
 pub const ENV_THING_PWD: &str = "THING_PWD";
 pub const ENV_LATEST_TIMESTAMP: &str = "LATEST_TIMESTAMP";
+pub const ENV_SENSOR_KEYS: &str = "SENSOR_IDS"; // Seperated with ';'
 /// ENV for GRPC Socket
 const ENV_GRPC_SOCKET: &str = "GATEWAY_GRPC_SOCKET";
 /// Default GRPC Socket

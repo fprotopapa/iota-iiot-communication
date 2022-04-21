@@ -5,7 +5,8 @@ use std::fmt::Debug;
 use std::str::FromStr;
 
 use crate::config::{
-    ENV_CHANNELS_KEY, ENV_THING_KEY, ENV_THING_PWD, IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET,
+    ENV_CHANNELS_KEY, ENV_SENSOR_KEYS, ENV_THING_KEY, ENV_THING_PWD, IDENTITY_SOCKET, MQTT_SOCKET,
+    STREAMS_SOCKET,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -21,11 +22,20 @@ pub fn serialize_msg<T: prost::Message>(msg: &T) -> Vec<u8> {
     buf
 }
 
-/// Get Channel ID, split string over seperator ';'
+/// Get Channel IDs, split string over seperator ';'
 pub fn get_channel_ids() -> Vec<String> {
     let channel_ids = env::var(ENV_CHANNELS_KEY).expect("ENV for Channel Keys not Found");
     info!("ENV: {} = {}", ENV_CHANNELS_KEY, &channel_ids);
     let keys_vec: Vec<_> = channel_ids.split(';').collect();
+    let keys_string: Vec<String> = keys_vec.iter().map(|s| s.to_string()).collect();
+    keys_string
+}
+
+/// Get Sensor IDs, split string over seperator ';'
+pub fn get_sensor_ids() -> Vec<String> {
+    let sensor_ids = env::var(ENV_SENSOR_KEYS).expect("ENV for Sensor Keys not Found");
+    info!("ENV: {} = {}", ENV_SENSOR_KEYS, &sensor_ids);
+    let keys_vec: Vec<_> = sensor_ids.split(';').collect();
     let keys_string: Vec<String> = keys_vec.iter().map(|s| s.to_string()).collect();
     keys_string
 }

@@ -6,24 +6,28 @@ use crate::config::{ENV_DEVICE_ID, ENV_LATEST_TIMESTAMP, ENV_THING_KEY};
 use crate::db_module as db;
 use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
 use crate::grpc_streams::{IotaStreamsReply, IotaStreamsSendMessageRequest};
-use crate::models::{Sensor, SensorData, SensorType, Stream};
+use crate::models::{Sensor, SensorType, Stream};
 use crate::util::{
     connect_streams, get_channel, get_identification, get_thing, parse_env, update_streams_entry,
 };
 
-pub async fn send_sensor_data(channel_key: &str, sensor_id: i32) -> Result<String, String> {
+pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<String, String> {
     info!("--- send_sensor_data() ---");
     let author_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
     info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
     info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
+    // Connect to Database
+    let db_client = db::establish_connection();
+    let sensor = match db::select_sensor_by_name(&db_client, sensor_id) {
+        Ok(r) => r,
+        Err(e) => return Err(format!("Sensor Not Found: {}", e)),
+    };
     // Connect to IOTA Streams Service
     let mut stream_client = connect_streams().await?;
     // Get Latest Timestamp
     let timestamp = parse_env::<i64>(ENV_LATEST_TIMESTAMP);
-    // Connect to Database
-    let db_client = db::establish_connection();
-    let db_entries = match db::select_sensor_entry_for_tangle(&db_client, sensor_id, timestamp) {
+    let db_entries = match db::select_sensor_entry_for_tangle(&db_client, sensor.id, timestamp) {
         Ok(r) => r,
         Err(_) => return Err("Unable to Select Sensor Entries".to_string()),
     };
@@ -117,25 +121,6 @@ async fn send_message_to_tangle(
     };
 }
 
-fn get_sensor_data(
-    db_client: &diesel::SqliteConnection,
-    query: &str,
-    is_true: bool,
-) -> Result<Vec<SensorData>, String> {
-    match db::select_sensor_entry(db_client, query, is_true, 0) {
-        Ok(res) => {
-            info!("Sensor Entries Selected with {}: {}", query, is_true);
-            return Ok(res);
-        }
-        Err(_) => {
-            return Err(format!(
-                "Unable to Select Sensor Entries with {}: {}",
-                query, is_true
-            ))
-        }
-    };
-}
-
 fn get_sensor(db_client: &diesel::SqliteConnection, sensor_id: i32) -> Result<Sensor, String> {
     match db::select_sensor(&db_client, sensor_id) {
         Ok(res) => {
@@ -157,24 +142,6 @@ fn get_sensor_type(
         }
         Err(_) => return Err(format!("Unable to Select Sensor with ID: {}", type_id)),
     };
-}
-
-fn update_sensor_entry(
-    db_client: &diesel::SqliteConnection,
-    entry_id: i32,
-    query: &str,
-    is_true: bool,
-) -> Result<(), String> {
-    match db::update_sensor_entry(db_client, entry_id, query, is_true) {
-        Ok(_) => info!("Sensor Entry Updated to {} = {}", query, is_true),
-        Err(_) => {
-            return Err(format!(
-                "Unable to Update Sensor Entry to {} = {}",
-                query, is_true
-            ))
-        }
-    };
-    Ok(())
 }
 
 fn get_streams(db_client: &diesel::SqliteConnection, channel_id: i32) -> Result<Stream, String> {
