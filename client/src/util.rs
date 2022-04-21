@@ -1,6 +1,8 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use std::env;
+use std::fmt::Debug;
+use std::str::FromStr;
 
 use crate::config::{
     ENV_CHANNELS_KEY, ENV_THING_KEY, ENV_THING_PWD, IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET,
@@ -70,6 +72,15 @@ pub fn generate_random_sequence() -> String {
         .map(char::from)
         .collect();
     rand_string
+}
+
+pub fn parse_env<T>(env_var_name: &str) -> T
+where
+    T: FromStr,
+    T::Err: Debug,
+{
+    let var = env::var(env_var_name).unwrap();
+    var.parse().unwrap()
 }
 
 pub async fn connect_mqtt() -> Result<MqttOperatorClient<tonic::transport::Channel>, String> {

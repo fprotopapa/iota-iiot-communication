@@ -16,8 +16,8 @@ pub async fn state_machine() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(r) => info!("{}", r),
                 Err(e) => error!("{}", e),
             };
-            // Publish Verified Data to Public Stream ToDo
-            match send_sensor_data().await {
+            // Publish Verified Data to Public Stream ToDo: Add Sensor To Publish
+            match send_sensor_data(&channel_id).await {
                 Ok(r) => info!("{}", r),
                 Err(e) => error!("{}", e),
             };
