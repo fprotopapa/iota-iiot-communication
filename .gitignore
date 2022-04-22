@@ -1,0 +1,6 @@
+Dockerfile
+/docker/.env*
+/docker/ca.crt
+
+
+Deploy_process.md

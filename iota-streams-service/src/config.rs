@@ -5,7 +5,7 @@ use std::env;
 /// ENV for GRPC Socket
 const ENV_GRPC_SOCKET: &str = "STREAMS_GRPC_SOCKET";
 /// Default GRPC Socket
-const DEFAULT_GRPC_SOCKET: &str = "[::1]:50052";
+const DEFAULT_GRPC_SOCKET: &str = "0.0.0.0:50052";
 /// ENV name for Node URL for Tangle communication: STREAMS_NODE_URL
 pub const ENV_NODE_URL: &str = "STREAMS_NODE_URL";
 /// ENV name for local Proof of work setting: STREAMS_LOCAL_POW (default: false)

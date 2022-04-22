@@ -6,8 +6,8 @@ use sensor_grpc_adapter as adapter;
 pub async fn receive_sensor_data(
     mut rx: mpsc::Receiver<sensor_grpc_adapter::ServerSensorChannel>,
 ) -> Result<(), String> {
+    info!("--- receive_sensor_data() ---");
     loop {
-        info!("--- receive_sensor_data() ---");
         // Wait for Sensor Data from Sensor GRPC Service
         match rx.recv().await {
             Some(msg) => {
@@ -60,7 +60,7 @@ pub async fn receive_sensor_data(
                     }
                 };
             }
-            None => info!("No Sensor Data Available"),
+            None => (),//info!("No Sensor Data Available"),
         };
     }
 }

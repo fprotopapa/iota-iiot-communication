@@ -6,7 +6,7 @@ use std::env;
 /// ENV for GRPC Socket
 const ENV_GRPC_SOCKET: &str = "IDENTITY_GRPC_SOCKET";
 /// Default GRPC Socket
-const DEFAULT_GRPC_SOCKET: &str = "[::1]:50054";
+const DEFAULT_GRPC_SOCKET: &str = "0.0.0.0:50054";
 /// MQTT Subscriber Message Stream Buffer Size
 pub const MESSAGE_BUFFER_SIZE: usize = 25;
 /// ENV Name for MQTT Server Address

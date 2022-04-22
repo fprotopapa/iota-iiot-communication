@@ -19,6 +19,7 @@ mod state_machine;
 mod util;
 
 use db_module as db;
+use tokio::time::{sleep, Duration};
 
 pub mod grpc_streams {
     tonic::include_proto!("iota_streams_grpc");
@@ -47,7 +48,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Initialize Client");
     while !(match init().await {
         Ok(r) => r,
-        Err(e) => e,
+        Err(e) => {
+            sleep(Duration::from_millis(1000)).await;
+            e
+        },
     }) {}
     info!("----------------------------- Start Main Program -----------------------------");
     let _ = state_machine();

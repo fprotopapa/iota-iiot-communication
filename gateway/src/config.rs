@@ -10,11 +10,11 @@ pub const TOPIC_STREAM: &str = "stream";
 pub const TOPIC_COMMAND: &str = "command";
 // Gateway
 // Number of Subscribers Expected
-pub const MQTT_SOCKET: &str = "[::1]:50054";
+pub const MQTT_SOCKET: &str = "0.0.0.0:50054";
 /// Default Streams Service GRPC Socket
-pub const STREAMS_SOCKET: &str = "[::1]:50052";
+pub const STREAMS_SOCKET: &str = "0.0.0.0:50052";
 /// Default Identity Service GRPC Socket
-pub const IDENTITY_SOCKET: &str = "[::1]:50053";
+pub const IDENTITY_SOCKET: &str = "0.0.0.0:50053";
 pub const ENV_TOTAL_NUM_SUBSCRIBER: &str = "NUM_SUBSCRIBER";
 pub const ENV_DEVICE_NAME: &str = "DEVICE_NAME";
 pub const ENV_DEVICE_TYPE: &str = "DEVICE_TYPE";
@@ -25,7 +25,7 @@ pub const ENV_THING_PWD: &str = "THING_PWD";
 /// ENV for GRPC Socket
 const ENV_GRPC_SOCKET: &str = "GATEWAY_GRPC_SOCKET";
 /// Default GRPC Socket
-const DEFAULT_GRPC_SOCKET: &str = "[::1]:50051";
+const DEFAULT_GRPC_SOCKET: &str = "0.0.0.0:50051";
 /// Default for Channel Buffer Size
 pub const DEFAULT_BUFFER_SIZE: usize = 32;
 /// Structure used to parse configuration file

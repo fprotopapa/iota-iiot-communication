@@ -11,11 +11,11 @@ pub const TOPIC_COMMAND: &str = "command";
 pub const PUBLIC_CHANNEL_ID: &str = "public_stream";
 // Gateway
 // Number of Subscribers Expected
-pub const MQTT_SOCKET: &str = "[::1]:50054";
+pub const MQTT_SOCKET: &str = "0.0.0.0:50054";
 /// Default Streams Service GRPC Socket
-pub const STREAMS_SOCKET: &str = "[::1]:50052";
+pub const STREAMS_SOCKET: &str = "0.0.0.0:50052";
 /// Default Identity Service GRPC Socket
-pub const IDENTITY_SOCKET: &str = "[::1]:50053";
+pub const IDENTITY_SOCKET: &str = "0.0.0.0:50053";
 pub const ENV_IS_FACTORY: &str = "IS_FACTORY"; // bool "true", "false"
 pub const ENV_ANNLINK_PUBLIC: &str = "PUBLIC_ANN_LINK";
 pub const ENV_DEVICE_NAME: &str = "DEVICE_NAME";
@@ -29,18 +29,18 @@ pub const ENV_SENSOR_KEYS: &str = "SENSOR_IDS"; // Seperated with ';'
 /// ENV for GRPC Socket
 const ENV_GRPC_SOCKET: &str = "GATEWAY_GRPC_SOCKET";
 /// Default GRPC Socket
-const DEFAULT_GRPC_SOCKET: &str = "[::1]:50051";
+const DEFAULT_GRPC_SOCKET: &str = "[::0]:50051";
 /// Structure used to parse configuration file
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SensorConfig {
     pub grpc: Grpc,
 }
-/// Socket needed for GRPC server, for example \[::1]:50051
+/// Socket needed for GRPC server, for example 0.0.0.0:50051
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Grpc {
     pub socket: String,
 }
-/// Default implementation uses socket at \[::1]:50051, default can be set via ENVs
+/// Default implementation uses socket at 0.0.0.0:50051, default can be set via ENVs
 /// and Sensor information
 impl Default for SensorConfig {
     fn default() -> Self {

@@ -4,7 +4,7 @@ use std::env;
 /// ENV for GRPC Socket
 const ENV_GRPC_SOCKET: &str = "SENSOR_GRPC_SOCKET";
 /// Default GRPC Socket
-const DEFAULT_GRPC_SOCKET: &str = "[::1]:50051";
+const DEFAULT_GRPC_SOCKET: &str = "0.0.0.0:50051";
 /// Default for Channel Buffer Size
 #[allow(dead_code)]
 pub const DEFAULT_BUFFER_SIZE: usize = 32;
