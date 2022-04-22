@@ -5,8 +5,8 @@ use std::fmt::Debug;
 use std::str::FromStr;
 
 use crate::config::{
-    ENV_CHANNELS_KEY, ENV_SENSOR_KEYS, ENV_THING_KEY, ENV_THING_PWD, IDENTITY_SOCKET, MQTT_SOCKET,
-    STREAMS_SOCKET,
+    ENV_CHANNELS_KEY, ENV_IS_FACTORY, ENV_SENSOR_KEYS, ENV_THING_KEY, ENV_THING_PWD,
+    IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -22,6 +22,17 @@ pub fn serialize_msg<T: prost::Message>(msg: &T) -> Vec<u8> {
     buf
 }
 
+pub fn is_factory() -> bool {
+    let is_factory_str = env::var(ENV_IS_FACTORY).expect("ENV for Client Switch not Found");
+    let is_factory: bool = match is_factory_str.as_str() {
+        "true" => true,
+        "t" => true,
+        "false" => false,
+        "f" => false,
+        _ => false,
+    };
+    is_factory
+}
 /// Get Channel IDs, split string over seperator ';'
 pub fn get_channel_ids() -> Vec<String> {
     let channel_ids = env::var(ENV_CHANNELS_KEY).expect("ENV for Channel Keys not Found");

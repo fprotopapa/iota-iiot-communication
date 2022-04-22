@@ -16,6 +16,7 @@ pub const MQTT_SOCKET: &str = "[::1]:50054";
 pub const STREAMS_SOCKET: &str = "[::1]:50052";
 /// Default Identity Service GRPC Socket
 pub const IDENTITY_SOCKET: &str = "[::1]:50053";
+pub const ENV_IS_FACTORY: &str = "IS_FACTORY"; // bool "true", "false"
 pub const ENV_ANNLINK_PUBLIC: &str = "PUBLIC_ANN_LINK";
 pub const ENV_DEVICE_NAME: &str = "DEVICE_NAME";
 pub const ENV_DEVICE_TYPE: &str = "DEVICE_TYPE";

@@ -15,10 +15,12 @@ use crate::grpc_streams::IotaStreamsRequest;
 use crate::models::Identification;
 use crate::models::{Channel, Thing};
 use crate::mqtt_encoder as enc;
-use crate::util::{generate_random_sequence, get_channel_ids, send_mqtt_message, serialize_msg};
+use crate::util::{
+    generate_random_sequence, get_channel_ids, is_factory, send_mqtt_message, serialize_msg,
+};
 
 pub async fn init() -> Result<bool, bool> {
-    // ToDo: exclude when basic client ?
+    let is_factory = is_factory();
     let author_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
     info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
     let channel_ids = get_channel_ids();
@@ -76,8 +78,9 @@ pub async fn init() -> Result<bool, bool> {
     // Create Public Streams Channel
     // Get Channel ID
     let channel = get_channel(&db_client, PUBLIC_CHANNEL_ID)?;
-    // ToDo: exclude when basic client
-    init_streams(&db_client, &mut stream_client, channel.id, &author_id).await?;
+    if is_factory {
+        init_streams(&db_client, &mut stream_client, channel.id, &author_id).await?;
+    }
     info!("Gateway Successful Initialized");
 
     Ok(true)
@@ -295,54 +298,6 @@ fn get_channel(db_client: &diesel::SqliteConnection, channel_key: &str) -> Resul
         }
     };
 }
-
-// pub fn update_sensor_entries(
-//     db_client: &diesel::SqliteConnection,
-//     channel_id: i32,
-//     sensor_list: Vec<Sensor>,
-// ) -> Result<(), bool> {
-//     for sensor in sensor_list {
-//         match db::create_sensor_type(&db_client, &sensor.type_descr, &sensor.unit) {
-//             Ok(_) => info!(
-//                 "Sensor Type Entry Created for Sensor: {}",
-//                 &sensor.type_descr
-//             ),
-//             Err(_) => error!(
-//                 "Error Creating Sensor Type Entry for : {}",
-//                 &sensor.type_descr
-//             ),
-//         };
-//         let sensor_type = match db::select_sensor_type_by_desc(&db_client, &sensor.type_descr) {
-//             Ok(res) => {
-//                 info!("Sensor Type Entry Selected");
-//                 res
-//             }
-//             Err(_) => {
-//                 error!("Unable to Select Sensor Type Entry: {}", &sensor.type_descr);
-//                 return Err(false);
-//             }
-//         };
-//         match db::create_sensor(
-//             &db_client,
-//             db::SensorEntry {
-//                 channel_id: channel_id,
-//                 sensor_types_id: sensor_type.id,
-//                 sensor_id: sensor.sensor_id.clone(),
-//                 sensor_name: sensor.sensor_name.clone(),
-//             },
-//         ) {
-//             Ok(_) => info!(
-//                 "Sensor Entry Created for ID: {}, Name: {}",
-//                 &sensor.sensor_id, &sensor.sensor_name
-//             ),
-//             Err(_) => error!(
-//                 "Error Creating Sensor Entry for ID: {}, Name: {}",
-//                 &sensor.sensor_id, &sensor.sensor_name
-//             ),
-//         };
-//     }
-//     Ok(())
-// }
 
 pub async fn init_streams(
     db_client: &diesel::SqliteConnection,

@@ -14,7 +14,7 @@ use crate::grpc_identity::IotaIdentityRequest;
 use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
 use crate::grpc_mqtt::{MqttMsgsReply, MqttRequest};
 use crate::grpc_streams::IotaStreamsRequest;
-use crate::models::{Identity, Sensor, SensorData, SensorType};
+use crate::models::{Identity, Sensor, SensorData, SensorType, Stream};
 use crate::mqtt_encoder as enc;
 use crate::util::{
     connect_identity, connect_mqtt, connect_streams, get_channel, get_identification, get_thing,
@@ -70,7 +70,16 @@ pub async fn mqtt_save_sensor_data(payload: Vec<u8>, channel_key: &str) -> Resul
     let channel = get_channel(&db_client, channel_key)?;
     save_mqtt_sensor_data(&db_client, channel.id, msg)?;
     let mut streams_client = connect_streams().await?;
-    // ToDo: Check for keyload
+    let stream_entry = get_streams(&db_client, channel.id)?;
+    // Check if Keyloads are sent,
+    match stream_entry.key_link {
+        Some(r) => {
+            if r.is_empty() {
+                return Err("No IOTA Streams Connection Established (Keyload Missing)".to_string());
+            }
+        }
+        None => return Err("No IOTA Streams Connection Established (Keyload Missing)".to_string()),
+    };
     let msgs = match streams_client
         .receive_messages(IotaStreamsRequest {
             id: channel_key.to_string(),
@@ -705,6 +714,21 @@ fn make_identity(db_client: &diesel::SqliteConnection, did: &str) -> Result<(), 
         }
         Err(_) => {
             return Err(format!("Unable to Create Identity Entry for DID: {}", did));
+        }
+    };
+}
+
+fn get_streams(db_client: &diesel::SqliteConnection, channel_id: i32) -> Result<Stream, String> {
+    match db::select_stream(&db_client, channel_id) {
+        Ok(res) => {
+            info!("Stream Entry Selected with Channel ID: {}", channel_id);
+            return Ok(res);
+        }
+        Err(_) => {
+            return Err(format!(
+                "Unable to Select Stream Entry with Channel ID: {}",
+                channel_id
+            ))
         }
     };
 }
