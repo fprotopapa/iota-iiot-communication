@@ -6,7 +6,7 @@ use std::io::Cursor;
 
 use crate::config::{
     ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, ENV_TOTAL_NUM_SUBSCRIBER, TOPIC_COMMAND,
-    TOPIC_DID, TOPIC_IDENTITY, TOPIC_SETTING, TOPIC_STREAM,
+    TOPIC_DID, TOPIC_IDENTITY, TOPIC_SETTING, TOPIC_STREAM, ENV_THING_PWD,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -369,7 +369,14 @@ async fn receive_messages(
     mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
 ) -> Result<MqttMsgsReply, String> {
     let response = match mqtt_client
-        .receive_mqtt_message(tonic::Request::new(MqttRequest::default()))
+        .receive_mqtt_message(tonic::Request::new(
+            MqttRequest {
+                id: env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found"),
+                pwd: env::var(ENV_THING_PWD).expect("ENV for Thing PWD not Found"),
+                channel: env::var(ENV_CHANNEL_KEY).expect("ENV for Channel Key not Found"),
+                topic: "".to_string(),
+                message: vec![],
+        }))
         .await
     {
         Ok(res) => res.into_inner(),
