@@ -1,1 +1,1 @@
-# Persistent DB for Gatewat + Mock
+# Persistent DB for Gateway + Mock
