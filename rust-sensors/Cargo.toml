@@ -1,8 +1,0 @@
-[workspace]
-
-members = [
-    "mock",
-    "opc-ua",
-    "bluetooth",
-    "send_doc",
-]
