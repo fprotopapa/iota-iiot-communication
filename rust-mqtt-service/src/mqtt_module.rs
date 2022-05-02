@@ -31,10 +31,10 @@ pub async fn send_grpc_message<'a>(
 ) -> Result<String, String> {
     info!("--- send_grpc_message() ---");
     // Make Client
-    let client_opt = create_client_option(&cfg.handler.host, msg.id, "pub");
+    let client_opt = create_client_option_wo_id(&cfg.handler.host); // create_client_option(&cfg.handler.host, msg.id, "pub"); 
     let client = create_client(client_opt)?;
     let conn_opt = create_conn_option(cfg, msg.id, msg.pwd, true);
-    connect_to_broker(&client, conn_opt).await;
+    connect_to_broker(&client, conn_opt).await?;
     let topic = make_topic_address(msg.channel, msg.topic);
     info!("Send Message to Topic: {}", topic);
     let status = send_message(&client, &topic, msg.payload.to_vec(), cfg.handler.qos_pub).await?;
@@ -55,7 +55,7 @@ pub async fn receive_grpc_messages<'a>(
     let conn_opt = create_conn_option(cfg, msg.id, msg.pwd, false);
 
     let msg_stream = client.get_stream(MESSAGE_BUFFER_SIZE);
-    connect_to_broker(&client, conn_opt).await;
+    connect_to_broker(&client, conn_opt).await?;
     if is_topic {
         client.subscribe(
             make_topic_address(msg.channel, msg.topic),
@@ -78,6 +78,13 @@ fn create_client_option(host: &str, id: &str, postfix: &str) -> mqtt::CreateOpti
     mqtt::CreateOptionsBuilder::new()
         .server_uri(host)
         .client_id(format!("{}_{}", id, postfix))
+        .finalize()
+}
+/// Build Client Options wo id
+#[allow(dead_code)]
+fn create_client_option_wo_id(host: &str) -> mqtt::CreateOptions {
+    mqtt::CreateOptionsBuilder::new()
+        .server_uri(host)
         .finalize()
 }
 /// Make Client from Option
@@ -124,10 +131,11 @@ fn make_topic_address(channel_id: &str, topic: &str) -> String {
     format!("channels/{}/messages/{}", channel_id, topic)
 }
 /// Establish Connection to Broker
-pub async fn connect_to_broker(client: &paho_mqtt::AsyncClient, conn_opt: mqtt::ConnectOptions) {
-    while let Err(_) = client.connect(conn_opt.clone()).await {
-        sleep(Duration::from_millis(1000)).await;
-    }
+pub async fn connect_to_broker(client: &paho_mqtt::AsyncClient, conn_opt: mqtt::ConnectOptions) -> Result<(), String> {
+    match client.connect(conn_opt.clone()).await {
+        Ok(_) => return Ok(()),
+        Err(e) => return Err(e.to_string()),
+    };
 }
 /// Try Reconnect
 #[allow(dead_code)]
