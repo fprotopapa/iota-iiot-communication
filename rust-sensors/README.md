@@ -28,6 +28,7 @@ Architecture:
 
 ```
 git clone https://github.com/fprotopapa/rust-sensors.git && cd rust-sensors
+cd <sensor folder>
 cargo build
 ```
 

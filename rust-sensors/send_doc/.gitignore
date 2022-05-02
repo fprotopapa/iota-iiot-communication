@@ -1,1 +1,4 @@
 /target
+/config/*
+
+!/config/README.md
