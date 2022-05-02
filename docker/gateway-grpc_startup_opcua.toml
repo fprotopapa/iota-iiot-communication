@@ -1,0 +1,25 @@
+[grpc]
+socket = '0.0.0.0:50051'
+[[sensors.list]]
+sensor_id = '2s=t1'
+sensor_name = 'OPC-UA MCP12'
+type_descr = 'Temperature'
+unit = 'C'
+
+[[sensors.list]]
+sensor_id = '2s=t2'
+sensor_name = 'OPC-UA NTC-1280'
+type_descr = 'Temperature'
+unit = 'C'
+
+[[sensors.list]]
+sensor_id = '2s=t3'
+sensor_name = 'OPC-UA MCP18'
+type_descr = 'Temperature'
+unit = 'C'
+
+[[sensors.list]]
+sensor_id = '2s=t4'
+sensor_name = 'OPC-UA EYK56'
+type_descr = 'Temperature'
+unit = 'C'

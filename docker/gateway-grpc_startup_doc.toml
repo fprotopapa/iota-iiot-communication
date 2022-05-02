@@ -1,0 +1,7 @@
+[grpc]
+socket = '0.0.0.0:50051'
+[[sensors.list]]
+sensor_id = 'Store-1'
+sensor_name = 'SAP-Warehouse-Logistic'
+type_descr = 'SAP Cargo Entry'
+unit = 'Document'

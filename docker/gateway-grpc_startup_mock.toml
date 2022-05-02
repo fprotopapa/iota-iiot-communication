@@ -1,0 +1,13 @@
+[grpc]
+socket = '0.0.0.0:50051'
+[[sensors.list]]
+sensor_id = '12'
+sensor_name = 'MPC 7812'
+type_descr = 'Temperature'
+unit = 'C'
+
+[[sensors.list]]
+sensor_id = '5'
+sensor_name = 'DHT 15'
+type_descr = 'Humidity'
+unit = '%'

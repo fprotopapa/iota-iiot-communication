@@ -7,7 +7,7 @@ COPY ./rust-mqtt-service/target/debug/mqtt-server .
 COPY ./iota-identity-service/target/debug/iota-identity-server .
 COPY ./iota-streams-service/target/debug/iota-streams-server .
 COPY ./client/target/debug/client .
-COPY ./docker/client_factory.sh ./start.sh
+COPY ./docker/client.sh ./start.sh
 COPY ./docker/ca.crt ./cert/ca.crt
 
 RUN mkdir ./states
@@ -21,10 +21,15 @@ RUN apt-get update && apt-get install -y \
 ENV DEVICE_NAME=ClientFactory
 ENV DEVICE_TYPE=Client
 ENV DEVICE_ID=ClientFactory_1
-## MQTT
+# MQTT
 ENV MQTT_SERVER_PORT=8883
+# Client
+ENV IS_FACTORY=true
+ENV PUBLIC_ANN_LINK=""
+ENV LATEST_TIMESTAMP=""
 # Log
 ENV RUST_LOG=info
+
 
 RUN ["chmod", "+x", "./start.sh"]
 

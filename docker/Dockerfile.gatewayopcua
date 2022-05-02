@@ -1,15 +1,18 @@
 # syntax=docker/dockerfile:1
 FROM ubuntu:20.04
 
-WORKDIR /gateway_mock
+WORKDIR /gateway_opcua
 
 COPY ./rust-mqtt-service/target/debug/mqtt-server .
 COPY ./iota-identity-service/target/debug/iota-identity-server .
 COPY ./iota-streams-service/target/debug/iota-streams-server .
 COPY ./gateway/target/debug/gateway .
-COPY ./rust-sensors/mock/target/debug/mock-client .
-COPY ./docker/gateway_mock.sh ./start.sh
-COPY ./docker/gateway-grpc_startup_mock.toml ./config/gateway-grpc.toml
+COPY ./rust-sensors/opc-ua/target/debug/opcua-client .
+COPY ./rust-sensors/opc-ua/target/debug/opcua-server .
+COPY ./rust-sensors/opc-ua/opcua-config/client.conf ./opcua-config/client.conf
+COPY ./rust-sensors/opc-ua/opcua-config/server.conf ./opcua-config/server.conf
+COPY ./docker/gateway_opcua.sh ./start.sh
+COPY ./docker/gateway-grpc_startup_opcua.toml ./config/gateway-grpc.toml
 COPY ./docker/ca.crt ./cert/ca.crt
 
 RUN mkdir ./states
@@ -21,13 +24,13 @@ RUN apt-get update && apt-get install -y \
     nano 
 
 # Device
-ENV DEVICE_NAME=GatewayMock
+ENV DEVICE_NAME=GatewayOPCUA
 ENV DEVICE_TYPE=Gateway
-ENV DEVICE_ID=GatewayMock_1
+ENV DEVICE_ID=GatewayOPCUA_1
 ## MQTT
 ENV MQTT_SERVER_PORT=8883
 # Gateway
-ENV NUM_SUBSCRIBER=2
+ENV NUM_SUBSCRIBER=1
 # Log
 ENV RUST_LOG=info
 
