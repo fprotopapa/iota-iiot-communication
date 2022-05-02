@@ -13,7 +13,12 @@ COPY ./docker/gateway-grpc_startup.toml ./config/gateway-grpc.toml
 COPY ./docker/ca.crt ./cert/ca.crt
 
 RUN mkdir ./states
-RUN echo "DATABASE_URL=file:database.db" > .env 
+RUN mkdir ./db
+RUN echo "DATABASE_URL=file:db/database.db" > .env 
+
+RUN apt-get update && apt-get install -y \
+    lsof \
+    nano 
 
 # Device
 ENV DEVICE_NAME=GatewayMock
@@ -28,4 +33,4 @@ ENV RUST_LOG=info
 
 RUN ["chmod", "+x", "./start.sh"]
 
-#ENTRYPOINT ["RUST_LOG=info ./gateway"]
+# ENTRYPOINT ["./start.sh"]
