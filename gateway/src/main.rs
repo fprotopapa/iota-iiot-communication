@@ -57,13 +57,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => {
             sleep(Duration::from_millis(1000)).await;
             e
-        },
+        }
     }) {}
     info!("----------------------------- Start Main Program -----------------------------");
     let (service, rx) = adapter::SensorAdapterService::new(DEFAULT_BUFFER_SIZE);
+    let grpc_server = adapter::run_sensor_adapter_server(service, &addr);
     let sensor_worker = receive_sensor_data(rx);
     let gateway_worker = state_machine();
-    let grpc_server = adapter::run_sensor_adapter_server(service, &addr);
     let _result = join!(sensor_worker, gateway_worker, grpc_server);
 
     Ok(())
