@@ -76,9 +76,20 @@ pub async fn init() -> Result<bool, bool> {
     let ip = get_external_ip().await?;
     update_ip_address(&db_client, &ip, thing.id)?;
     // Create Public Streams Channel
-    // Get Channel ID
-    let channel = get_channel(&db_client, PUBLIC_CHANNEL_ID)?;
     if is_factory {
+        match db::create_thing(&db_client, PUBLIC_CHANNEL_ID) {
+            Ok(_) => info!("New Thing Entry Created for Key: {}", &thing_key),
+            Err(_) => error!("Thing Entry Not Created for Key: {}", &thing_key),
+        };
+        // Get Thing ID
+        let thing = get_thing(&db_client, PUBLIC_CHANNEL_ID)?;
+        // Create Channel Entry
+        match db::create_channel(&db_client, thing.id, PUBLIC_CHANNEL_ID) {
+            Ok(_) => info!("New Channel Entry Created for Key: {}", PUBLIC_CHANNEL_ID),
+            Err(_) => error!("Channel Entry Not Created for Key: {}", PUBLIC_CHANNEL_ID),
+        };
+        // Get Channel ID
+        let channel = get_channel(&db_client, PUBLIC_CHANNEL_ID)?;
         init_streams(&db_client, &mut stream_client, channel.id, &author_id).await?;
     }
     info!("Gateway Successful Initialized");

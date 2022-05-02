@@ -5,8 +5,8 @@ use std::env;
 use std::io::Cursor;
 
 use crate::config::{
-    ENV_THING_KEY, TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY, TOPIC_SENSOR_VALUE, TOPIC_SETTING,
-    TOPIC_STREAM,
+    ENV_THING_KEY, ENV_THING_PWD, TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY, TOPIC_SENSOR_VALUE,
+    TOPIC_SETTING, TOPIC_STREAM,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -40,7 +40,7 @@ pub async fn receive_mqtt_messages(channel_key: &str) -> Result<String, String> 
     info!("--- receive_mqtt_messages() ---");
     let mut mqtt_client = connect_mqtt().await?;
     info!("Receive MQTT Messages ...");
-    let mut response = receive_messages(&mut mqtt_client).await?;
+    let mut response = receive_messages(&mut mqtt_client, channel_key).await?;
     for (payload, topic) in response.messages.iter_mut().zip(response.topics) {
         let result = match topic.as_str() {
             TOPIC_DID => mqtt_identity(payload.to_vec(), channel_key).await,
@@ -679,9 +679,16 @@ fn update_identity_unverifiable(
 
 async fn receive_messages(
     mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
+    channel_key: &str,
 ) -> Result<MqttMsgsReply, String> {
     let response = match mqtt_client
-        .receive_mqtt_message(tonic::Request::new(MqttRequest::default()))
+        .receive_mqtt_message(tonic::Request::new(MqttRequest {
+            id: env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found"),
+            pwd: env::var(ENV_THING_PWD).expect("ENV for Thing PWD not Found"),
+            channel: channel_key.to_string(),
+            topic: "".to_string(),
+            message: vec![],
+        }))
         .await
     {
         Ok(res) => res.into_inner(),

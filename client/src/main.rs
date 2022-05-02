@@ -51,10 +51,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => {
             sleep(Duration::from_millis(1000)).await;
             e
-        },
+        }
     }) {}
     info!("----------------------------- Start Main Program -----------------------------");
-    let _ = state_machine();
+    let _ = state_machine().await;
+
     Ok(())
 }
 
