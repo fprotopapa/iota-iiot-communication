@@ -2,5 +2,6 @@ Dockerfile
 /docker/.env*
 /docker/ca.crt
 
+*.db
 
 Deploy_process.md
