@@ -29,6 +29,7 @@ table! {
         did -> Text,
         verified -> Nullable<Bool>,
         unverifiable -> Nullable<Bool>,
+        subscribed -> Nullable<Bool>,
     }
 }
 

@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use crate::config::{
     ENV_CHANNELS_KEY, ENV_IS_FACTORY, ENV_SENSOR_KEYS, ENV_THING_KEY, ENV_THING_PWD,
-    IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET,
+    IDENTITY_SOCKET, MQTT_SOCKET, STREAMS_SOCKET, TOPIC_STREAM,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -14,6 +14,7 @@ use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
 use crate::grpc_mqtt::MqttRequest;
 use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
 use crate::models::{Channel, Identification, Thing};
+use crate::mqtt_encoder as enc;
 
 pub fn serialize_msg<T: prost::Message>(msg: &T) -> Vec<u8> {
     let mut buf = Vec::new();
@@ -84,6 +85,33 @@ pub async fn send_mqtt_message(
         Ok(res) => return Ok(res.into_inner().status),
         Err(e) => return Err(format!("Error:{}", e)),
     };
+}
+
+pub async fn send_sublink(
+    mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
+    db_client: &diesel::SqliteConnection,
+    sub_link: &str,
+    channel_id: &str,
+) -> Result<String, String> {
+    let sub_link = sub_link.to_string();
+    if sub_link.is_empty() {
+        return Ok("No Subscription Link Found".to_string());
+    }
+    let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
+    let thing = get_thing(db_client, &thing_key)?;
+    let identity = get_identification(&db_client, thing.id)?;
+    let payload = serialize_msg(&enc::Streams {
+        did: identity.did,
+        announcement_link: "".to_string(),
+        subscription_link: sub_link,
+        keyload_link: "".to_string(),
+        vc: match identity.vc {
+            Some(r) => r,
+            None => "".to_string(),
+        },
+    });
+    helper_send_mqtt(mqtt_client, payload, TOPIC_STREAM, channel_id).await?;
+    Ok("Send Subscription Link".to_string())
 }
 
 pub fn generate_random_sequence() -> String {

@@ -5,8 +5,8 @@ use std::env;
 use std::io::Cursor;
 
 use crate::config::{
-    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, ENV_TOTAL_NUM_SUBSCRIBER, TOPIC_COMMAND,
-    TOPIC_DID, TOPIC_IDENTITY, TOPIC_SETTING, TOPIC_STREAM, ENV_THING_PWD,
+    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, ENV_THING_PWD, ENV_TOTAL_NUM_SUBSCRIBER,
+    TOPIC_COMMAND, TOPIC_DID, TOPIC_IDENTITY, TOPIC_SETTING, TOPIC_STREAM,
 };
 use crate::db_module as db;
 use crate::grpc_identity::iota_identifier_client::IotaIdentifierClient;
@@ -107,7 +107,11 @@ pub async fn mqtt_streams(payload: Vec<u8>) -> Result<u32, String> {
         Some(r) => r,
         None => false,
     };
-    if !msg.subscription_link.is_empty() && is_verified {
+    let is_subscribed = match msg_identity.subscribed {
+        Some(r) => r,
+        None => false,
+    };
+    if !msg.subscription_link.is_empty() && is_verified && !is_subscribed {
         add_subscriber(
             &db_client,
             &mut stream_client,
@@ -116,8 +120,35 @@ pub async fn mqtt_streams(payload: Vec<u8>) -> Result<u32, String> {
             &author_id,
             &channel_key,
             &thing_key,
+            &msg.did,
         )
         .await?;
+    } else if !msg.subscription_link.is_empty() && is_verified && is_subscribed {
+        // Get number of subscribers
+        let channel = get_channel(&db_client, &channel_key)?;
+        let stream_entry = match db::select_stream(&db_client, channel.id) {
+            Ok(r) => r,
+            Err(e) => return Err(format!("Unable to Select Streams Entry: {}", e)),
+        };
+        let key_link = match stream_entry.key_link {
+            Some(r) => r,
+            None => "".to_string(),
+        };
+        if !key_link.is_empty() {
+            // Send Keyload over MQTT
+            let payload = serialize_msg(&enc::Streams {
+                announcement_link: "".to_string(),
+                subscription_link: "".to_string(),
+                keyload_link: key_link,
+                did: identity.did,
+                vc: match identity.vc {
+                    Some(r) => r,
+                    None => "".to_string(),
+                },
+            });
+            info!("Send Keyload over MQTT");
+            helper_send_mqtt(&mut mqtt_client, payload, TOPIC_STREAM).await?;
+        }
     }
     info!("Streams Message Processed");
     Ok(0)
@@ -239,18 +270,23 @@ async fn add_subscriber(
     author_id: &str,
     channel_key: &str,
     thing_key: &str,
+    msg_did: &str,
 ) -> Result<u32, String> {
-    info!("ENV: {} = {}", ENV_CHANNEL_KEY, &channel_key);
+    info!("--- add_subscriber() ---");
     match stream_client
         .add_subscriber(tonic::Request::new(IotaStreamsRequest {
             id: author_id.to_string(),
             link: sub_link.to_string(),
-            msg_type: 2, //  CreateNewSubscriber
+            msg_type: 3, //  AddSubscriber
         }))
         .await
     {
         Ok(res) => res.into_inner(),
         Err(e) => return Err(format!("Error Adding Subscriber: {}", e)),
+    };
+    match db::update_identity_to_subscribed(&db_client, msg_did, true) {
+        Ok(_) => (),
+        Err(e) => return Err(format!("Unable to Update Identity Entry: {}", e)),
     };
     // Get number of subscribers
     let channel = get_channel(&db_client, channel_key)?;
@@ -369,13 +405,12 @@ async fn receive_messages(
     mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
 ) -> Result<MqttMsgsReply, String> {
     let response = match mqtt_client
-        .receive_mqtt_message(tonic::Request::new(
-            MqttRequest {
-                id: env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found"),
-                pwd: env::var(ENV_THING_PWD).expect("ENV for Thing PWD not Found"),
-                channel: env::var(ENV_CHANNEL_KEY).expect("ENV for Channel Key not Found"),
-                topic: "".to_string(),
-                message: vec![],
+        .receive_mqtt_message(tonic::Request::new(MqttRequest {
+            id: env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found"),
+            pwd: env::var(ENV_THING_PWD).expect("ENV for Thing PWD not Found"),
+            channel: env::var(ENV_CHANNEL_KEY).expect("ENV for Channel Key not Found"),
+            topic: "".to_string(),
+            message: vec![],
         }))
         .await
     {

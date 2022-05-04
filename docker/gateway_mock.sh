@@ -3,5 +3,5 @@
 ./mqtt-server &
 ./iota-identity-server &
 ./iota-streams-server &
-( sleep 50 ; ./mock-client ) &
+( sleep 120 ; ./mock-client ) &
 ./gateway &

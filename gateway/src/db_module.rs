@@ -218,6 +218,28 @@ pub fn update_identity_to_unverifiable(
         }
     };
 }
+/// Update Identity Make Unverifiable
+pub fn update_identity_to_subscribed(
+    conn: &SqliteConnection,
+    digital_id: &str,
+    is_subscribed: bool,
+) -> Result<i32, i32> {
+    use self::identities::dsl::*;
+    match diesel::update(identities)
+        .filter(did.eq(digital_id))
+        .set(subscribed.eq(is_subscribed))
+        .execute(conn)
+    {
+        Ok(r) => {
+            info!("Affected Rows: {}", r);
+            return Ok(r as i32);
+        }
+        Err(e) => {
+            error!("{}", e);
+            return Err(-1);
+        }
+    };
+}
 /// Select Identity
 pub fn select_identity(conn: &SqliteConnection, digital_id: &str) -> Result<models::Identity, i32> {
     use self::identities::dsl::*;
@@ -390,6 +412,7 @@ pub fn create_identity<'a>(
         did: did,
         verified: verified,
         unverifiable: false,
+        subscribed: false,
     };
 
     let entry = match diesel::insert_into(identities::table)

@@ -1,8 +1,11 @@
 use serde_json::json;
 use std::env;
 
-use crate::config::{ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_SENSOR_VALUE};
+use crate::config::{
+    ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_SENSOR_VALUE, TOPIC_STREAM,
+};
 use crate::db_module as db;
+use crate::grpc_mqtt::mqtt_operator_client::MqttOperatorClient;
 use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
 use crate::grpc_streams::{IotaStreamsReply, IotaStreamsSendMessageRequest};
 use crate::models::{Sensor, SensorData, SensorType, Stream};
@@ -57,11 +60,15 @@ pub async fn send_sensor_data() -> Result<String, String> {
     let key_link = match stream_entry.key_link {
         Some(r) => {
             if r.is_empty() {
+                send_announcement(&mut mqtt_client, &db_client, &stream_entry.ann_link).await?;
                 return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
             }
             r
         }
-        None => return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string()),
+        None => {
+            send_announcement(&mut mqtt_client, &db_client, &stream_entry.ann_link).await?;
+            return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
+        }
     };
     // Check for all subscribers?
     // Check if IOTA values available?
@@ -117,6 +124,28 @@ pub async fn send_sensor_data() -> Result<String, String> {
         msg_link = response.link;
     }
     Ok("Exit with Success: send_sensor_data()".to_string())
+}
+
+async fn send_announcement(
+    mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
+    db_client: &diesel::SqliteConnection,
+    announcement_link: &str,
+) -> Result<String, String> {
+    let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
+    let thing = get_thing(db_client, &thing_key)?;
+    let identity = get_identification(&db_client, thing.id)?;
+    let payload = serialize_msg(&enc::Streams {
+        did: identity.did,
+        announcement_link: announcement_link.to_string(),
+        subscription_link: "".to_string(),
+        keyload_link: "".to_string(),
+        vc: match identity.vc {
+            Some(r) => r,
+            None => "".to_string(),
+        },
+    });
+    helper_send_mqtt(mqtt_client, payload, TOPIC_STREAM).await?;
+    Ok("Send Announcement Link".to_string())
 }
 
 async fn send_message_to_tangle(

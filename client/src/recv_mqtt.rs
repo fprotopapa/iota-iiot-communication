@@ -18,7 +18,7 @@ use crate::models::{Identity, Sensor, SensorData, SensorType, Stream};
 use crate::mqtt_encoder as enc;
 use crate::util::{
     connect_identity, connect_mqtt, connect_streams, get_channel, get_identification, get_thing,
-    helper_send_mqtt, serialize_msg, update_streams_entry,
+    helper_send_mqtt, send_sublink, serialize_msg, update_streams_entry,
 };
 use serde_derive::{Deserialize, Serialize};
 use std::fs;
@@ -61,6 +61,7 @@ pub async fn receive_mqtt_messages(channel_key: &str) -> Result<String, String> 
 
 pub async fn mqtt_save_sensor_data(payload: Vec<u8>, channel_key: &str) -> Result<u32, String> {
     info!("--- mqtt_save_sensor_data() ---");
+    let mut mqtt_client = connect_mqtt().await?;
     // Decode Payload
     let msg = match enc::Sensor::decode(&mut Cursor::new(payload)) {
         Ok(res) => res,
@@ -71,14 +72,22 @@ pub async fn mqtt_save_sensor_data(payload: Vec<u8>, channel_key: &str) -> Resul
     save_mqtt_sensor_data(&db_client, channel.id, msg)?;
     let mut streams_client = connect_streams().await?;
     let stream_entry = get_streams(&db_client, channel.id)?;
+    let sub_link = match stream_entry.sub_link {
+        Some(r) => r,
+        None => "".to_string(),
+    };
     // Check if Keyloads are sent,
     match stream_entry.key_link {
         Some(r) => {
             if r.is_empty() {
+                send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
                 return Err("No IOTA Streams Connection Established (Keyload Missing)".to_string());
             }
         }
-        None => return Err("No IOTA Streams Connection Established (Keyload Missing)".to_string()),
+        None => {
+            send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
+            return Err("No IOTA Streams Connection Established (Keyload Missing)".to_string());
+        }
     };
     let msgs = match streams_client
         .receive_messages(IotaStreamsRequest {
@@ -152,7 +161,6 @@ pub async fn mqtt_streams(payload: Vec<u8>, channel_key: &str) -> Result<u32, St
         Some(r) => r,
         None => false,
     };
-
     if !msg.announcement_link.is_empty() && is_verified {
         make_subscriber(
             &db_client,
@@ -532,6 +540,16 @@ pub async fn add_keyload(
     key_link: &str,
     channel_key: &str,
 ) -> Result<u32, String> {
+    let channel = get_channel(&db_client, &channel_key)?;
+    let stream_entry = get_streams(&db_client, channel.id)?;
+    match stream_entry.key_link {
+        Some(r) => {
+            if !r.is_empty() {
+                return Ok(0);
+            }
+        }
+        None => return Err("No Keyload Entry Detected".to_string()),
+    }
     // Connect to IOTA Streams Service
     let mut stream_client = connect_streams().await?;
     // Add Keyload
@@ -569,9 +587,29 @@ pub async fn make_subscriber(
     let mut mqtt_client = connect_mqtt().await?;
     // Connect to IOTA Streams Service
     let mut stream_client = connect_streams().await?;
-    // // Save Ann Link
     let channel = get_channel(&db_client, &channel_key)?;
-    update_streams_entry(db_client, ann_link, 0, "announcement", channel.id)?;
+    match get_streams(&db_client, channel.id) {
+        Ok(_) => return Ok(0),
+        Err(_) => {
+            match db::create_stream(
+                db_client,
+                db::StreamsEntry {
+                    channel_id: channel.id,
+                    ann_link: ann_link.to_string(),
+                    sub_link: "".to_string(),
+                    key_link: "".to_string(),
+                    msg_link: "".to_string(),
+                },
+            ) {
+                Ok(_) => info!("Streams Entry Created for Channel ID: {}", channel.id),
+                Err(_) => error!(
+                    "Error Creating Streams Entry for Channel ID: {}",
+                    channel.id
+                ),
+            };
+        }
+    };
+    //update_streams_entry(db_client, ann_link, 0, "announcement", channel.id)?;
     // Create Subscriber
     let msg = IotaStreamsRequest {
         id: device_id.to_string(),

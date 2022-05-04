@@ -74,6 +74,7 @@ pub struct Identity {
     pub did: String,
     pub verified: Option<bool>,
     pub unverifiable: Option<bool>,
+    pub subscribed: Option<bool>,
 }
 
 #[derive(Insertable)]
@@ -82,6 +83,7 @@ pub struct NewIdentity<'a> {
     pub did: &'a str,
     pub verified: bool,
     pub unverifiable: bool,
+    pub subscribed: bool,
 }
 
 #[derive(Queryable, Debug)]

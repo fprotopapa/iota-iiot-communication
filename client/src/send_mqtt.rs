@@ -8,7 +8,8 @@ use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
 use crate::grpc_streams::{IotaStreamsReply, IotaStreamsSendMessageRequest};
 use crate::models::{Sensor, SensorType, Stream};
 use crate::util::{
-    connect_streams, get_channel, get_identification, get_thing, parse_env, update_streams_entry,
+    connect_mqtt, connect_streams, get_channel, get_identification, get_thing, parse_env,
+    send_sublink, update_streams_entry,
 };
 
 pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<String, String> {
@@ -19,6 +20,7 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
     info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Connect to Database
     let db_client = db::establish_connection();
+    let mut mqtt_client = connect_mqtt().await?;
     let sensor = match db::select_sensor_by_name(&db_client, sensor_id) {
         Ok(r) => r,
         Err(e) => return Err(format!("Sensor Not Found: {}", e)),
@@ -36,15 +38,23 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
     let channel = get_channel(&db_client, channel_key)?;
     // Get Message Link
     let stream_entry = get_streams(&db_client, channel.id)?;
+    let sub_link = match stream_entry.sub_link {
+        Some(r) => r,
+        None => "".to_string(),
+    };
     // Check if Keyloads are sent,
     let key_link = match stream_entry.key_link {
         Some(r) => {
             if r.is_empty() {
+                send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
                 return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
             }
             r
         }
-        None => return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string()),
+        None => {
+            send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
+            return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
+        }
     };
     // Get Thing ID
     let thing = get_thing(&db_client, &thing_key)?;
