@@ -32,7 +32,7 @@ impl Default for SensorConfig {
                 socket: env::var(ENV_GRPC_SOCKET)
                     .unwrap_or_else(|_| DEFAULT_GRPC_SOCKET.to_string()),
             },
-            mock: Mock { delay_ms: 5000 },
+            mock: Mock { delay_ms: 40000 },
         }
     }
 }

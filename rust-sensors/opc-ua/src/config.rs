@@ -41,7 +41,7 @@ impl Default for SensorConfig {
                 cli_conf_path: "./opcua-config/client.conf".to_string(),
                 serv_conf_path: "./opcua-config/server.conf".to_string(),
                 server_urn: "urn:opcua-server".to_string(),
-                delay_ms: 5000,
+                delay_ms: 50000,
             },
         }
     }

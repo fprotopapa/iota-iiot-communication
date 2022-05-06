@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(r) => info!("Response T-Sensor: {}", r.status),
             Err(e) => error!("Unable to Send Data: {}", e),
         };
-        sleep(Duration::from_millis(cfg.mock.delay_ms)).await;
+        sleep(Duration::from_millis(5000)).await;
         let humid_data = sim_humidity().await;
         match adapter::send_sensor_data(&mut client, humid_data).await {
             Ok(r) => info!("Response H-Sensor: {}", r.status),
