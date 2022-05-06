@@ -4,4 +4,4 @@
 ./iota-identity-server &
 ./iota-streams-server &
 ( sleep 120 ; ./mock-client ) &
-./gateway &
+RUST_LOG=info ./gateway &

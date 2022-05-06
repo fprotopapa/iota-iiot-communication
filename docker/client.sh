@@ -3,4 +3,4 @@
 ./mqtt-server &
 ./iota-identity-server &
 ./iota-streams-server &
-./client
+RUST_LOG=info ./client

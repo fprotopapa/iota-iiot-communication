@@ -5,4 +5,4 @@
 ./iota-streams-server &
 ./opcua-server &
 ( sleep 50 ; ./opcua-client ) &
-./gateway &
+RUST_LOG=info ./gateway &

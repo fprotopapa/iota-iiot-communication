@@ -4,4 +4,4 @@
 ./iota-identity-server &
 ./iota-streams-server &
 ( sleep 180 ; ./doc-client ) &
-./gateway &
+RUST_LOG=info ./gateway &
