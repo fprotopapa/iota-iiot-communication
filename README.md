@@ -42,3 +42,8 @@ docker build -t gateway_doc -f docker/Dockerfile.gatewaydoc .
 
 docker run --env-file docker/.env_gatewaydoc -v $(pwd)/docker/storage/gatewaydoc:/gateway_doc/storage -it gateway_doc /bin/bash
 ```
+
+Log: 
+
+docker logs containername >& logs/myFile.log
+docker logs -f <yourContainer> &> your.log &
