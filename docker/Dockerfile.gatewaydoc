@@ -12,13 +12,12 @@ COPY ./docker/gateway_doc.sh ./start.sh
 COPY ./docker/gateway-grpc_startup_doc.toml ./config/gateway-grpc.toml
 COPY ./docker/ca.crt ./cert/ca.crt
 
-RUN mkdir ./states
-RUN mkdir ./db
-RUN echo "DATABASE_URL=file:db/database.db" > .env 
+RUN mkdir ./storage
+RUN echo "DATABASE_URL=file:storage/database.db" > .env 
 
-RUN apt-get update && apt-get install -y \
-    lsof \
-    nano 
+# RUN apt-get update && apt-get install -y \
+#     lsof \
+#     nano 
 
 # Device
 ENV DEVICE_NAME=GatewayDoc
@@ -29,7 +28,7 @@ ENV MQTT_SERVER_PORT=8883
 # Gateway
 ENV NUM_SUBSCRIBER=2
 # Log
-ENV RUST_LOG=info
+# ENV RUST_LOG=info
 
 RUN ["chmod", "+x", "./start.sh"]
 

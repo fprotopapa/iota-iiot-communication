@@ -10,12 +10,12 @@ COPY ./client/target/debug/client .
 COPY ./docker/client.sh ./start.sh
 COPY ./docker/ca.crt ./cert/ca.crt
 
-RUN mkdir ./states
-RUN echo "DATABASE_URL=file:db/database.db" > .env 
+RUN mkdir ./storage
+RUN echo "DATABASE_URL=file:storage/database.db" > .env 
 
-RUN apt-get update && apt-get install -y \
-    lsof \
-    nano
+# RUN apt-get update && apt-get install -y \
+#     lsof \
+#     nano
 
 # Device
 ENV DEVICE_NAME=ClientVendor
@@ -29,7 +29,7 @@ ENV PUBLIC_ANN_LINK=""
 ENV LATEST_TIMESTAMP=""
 ENV SENSOR_IDS=""
 # Log
-ENV RUST_LOG=info
+# ENV RUST_LOG=info
 
 RUN ["chmod", "+x", "./start.sh"]
 
