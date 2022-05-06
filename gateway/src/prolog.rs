@@ -34,13 +34,13 @@ pub async fn init() -> Result<bool, bool> {
     let db_client = db::establish_connection();
     // Connect to MQTT Service
     let mut mqtt_client = connect_mqtt().await?;
-    info!("Connected to MQTT Service");
+    //info!("Connected to MQTT Service");
     // Connect to IOTA Streams Service
     let mut stream_client = connect_streams().await?;
-    info!("Connected to Streams Service");
+    //info!("Connected to Streams Service");
     // Connect to Identity Service
     let mut identity_client = connect_identity().await?;
-    info!("Connected to Identity Service");
+    //info!("Connected to Identity Service");
     // Create Thing Entry
     match db::create_thing(&db_client, &thing_key) {
         Ok(_) => info!("New Thing Entry Created for Key: {}", &thing_key),

@@ -27,7 +27,6 @@ use std::path::Path;
 pub async fn receive_mqtt_messages() -> Result<String, String> {
     info!("--- receive_mqtt_messages() ---");
     let mut mqtt_client = connect_mqtt().await?;
-    info!("Receive MQTT Messages ...");
     let mut response = receive_messages(&mut mqtt_client).await?;
     for (payload, topic) in response.messages.iter_mut().zip(response.topics) {
         let result = match topic.as_str() {
@@ -77,11 +76,11 @@ pub async fn mqtt_first_verification(payload: Vec<u8>) -> Result<u32, String> {
 pub async fn mqtt_streams(payload: Vec<u8>) -> Result<u32, String> {
     info!("--- mqtt_streams() ---");
     let author_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
-    info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
+    //info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
     let channel_key = env::var(ENV_CHANNEL_KEY).expect("ENV for Channel Key not Found");
-    info!("ENV: {} = {}", ENV_CHANNEL_KEY, &channel_key);
+    //info!("ENV: {} = {}", ENV_CHANNEL_KEY, &channel_key);
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
-    info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
+    //info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Decode Payload
     let msg = match enc::Streams::decode(&mut Cursor::new(payload)) {
         Ok(res) => res,
@@ -157,7 +156,7 @@ pub async fn mqtt_streams(payload: Vec<u8>) -> Result<u32, String> {
 pub async fn mqtt_identity(payload: Vec<u8>) -> Result<u32, String> {
     info!("--- mqtt_identity() ---");
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
-    info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
+    //info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Connect to Identity Service
     let mut identity_client = connect_identity().await?;
     // Connect to MQTT Service
@@ -230,7 +229,7 @@ async fn verify_identity(
 pub async fn mqtt_settings(payload: Vec<u8>) -> Result<u32, String> {
     info!("--- mqtt_settings() ---");
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
-    info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
+    //info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     let msg = match enc::Setting::decode(&mut Cursor::new(payload)) {
         Ok(res) => res,
         Err(e) => return Err(format!("Error Decoding Message: {}", e)),

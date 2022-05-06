@@ -18,11 +18,11 @@ use crate::util::{
 pub async fn send_sensor_data() -> Result<String, String> {
     info!("--- send_sensor_data() ---");
     let author_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
-    info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
+    //info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
     let channel_key = env::var(ENV_CHANNEL_KEY).expect("ENV for Channel Key not Found");
-    info!("ENV: {} = {}", ENV_CHANNEL_KEY, &channel_key);
+    //info!("ENV: {} = {}", ENV_CHANNEL_KEY, &channel_key);
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
-    info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
+    //info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Connect to Database
     let db_client = db::establish_connection();
     // Connect to MQTT Service
@@ -80,8 +80,13 @@ pub async fn send_sensor_data() -> Result<String, String> {
 
     let mut msg_link = match stream_entry.msg_link {
         Some(r) => {
-            info!("IOTA Streams Message Link: {}", &r);
-            r
+            if r.is_empty() {
+                info!("IOTA Streams Message Link: {}", &key_link);
+                key_link
+            } else {
+                info!("IOTA Streams Message Link: {}", &r);
+                r
+            }
         }
         None => {
             info!("IOTA Streams Message Link (use Key Link): {}", &key_link);
