@@ -3,5 +3,17 @@ Dockerfile
 /docker/ca.crt
 
 *.db
+*.hodl
+/docker/storage/clientfactory/*
+/docker/storage/clientvendor/*
+/docker/storage/gatewaydoc/*
+/docker/storage/gatewaymock/*
+/docker/storage/gatewayopcua/*
+
+!/docker/storage/clientfactory/README.md
+!/docker/storage/clientvendor/README.md
+!/docker/storage/gatewaydoc/README.md
+!/docker/storage/gatewaymock/README.md
+!/docker/storage/gatewayopcua/README.md
 
 Deploy_process.md

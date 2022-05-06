@@ -1,6 +1,6 @@
 /target
-/states/*
+/storage/*
 /config/*
 
-!/states/README.md
+!/storage/README.md
 !/config/README.md

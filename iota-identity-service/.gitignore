@@ -3,5 +3,5 @@
 /config/*
 !/config/README.md
 
-/stronghold/*
-!/stronghold/README.md
+/storage/*
+!/storage/README.md
