@@ -34,16 +34,16 @@ pub async fn init() -> Result<bool, bool> {
     let db_client = db::establish_connection();
     // Connect to IOTA Streams Service
     let mut stream_client = connect_streams().await?;
-    info!("Connected to Streams Service");
+    //info!("Connected to Streams Service");
     // Connect to MQTT Service
     let mut mqtt_client = connect_mqtt().await?;
-    info!("Connected to MQTT Service");
+    //info!("Connected to MQTT Service");
     // Connect to IOTA Streams Service
     //let mut stream_client = connect_streams().await?;
-    info!("Connected to Streams Service");
+    //info!("Connected to Streams Service");
     // Connect to Identity Service
     let mut identity_client = connect_identity().await?;
-    info!("Connected to Identity Service");
+    //info!("Connected to Identity Service");
     // Create Thing Entry
     match db::create_thing(&db_client, &thing_key) {
         Ok(_) => info!("New Thing Entry Created for Key: {}", &thing_key),
@@ -125,7 +125,7 @@ async fn connect_identity() -> Result<IotaIdentifierClient<tonic::transport::Cha
         match IotaIdentifierClient::connect(format!("http://{}", IDENTITY_SOCKET)).await {
             Ok(res) => res,
             Err(e) => {
-                println!("Error Connecting to Identity-Service: {}", e);
+                error!("Error Connecting to Identity-Service: {}", e);
                 return Err(false);
             }
         };
@@ -342,6 +342,7 @@ pub async fn init_streams(
                     return Err(false);
                 }
             };
+            // Make Announcement Link Accessible on Device
             env::set_var(ENV_ANNLINK_PUBLIC, &author.link);
             info!("Announcement Link: {}", &author.link);
             info!("Saved in ENV: {}", ENV_ANNLINK_PUBLIC);

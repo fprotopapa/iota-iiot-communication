@@ -39,7 +39,6 @@ struct MessageFromJson {
 pub async fn receive_mqtt_messages(channel_key: &str) -> Result<String, String> {
     info!("--- receive_mqtt_messages() ---");
     let mut mqtt_client = connect_mqtt().await?;
-    info!("Receive MQTT Messages ...");
     let mut response = receive_messages(&mut mqtt_client, channel_key).await?;
     for (payload, topic) in response.messages.iter_mut().zip(response.topics) {
         let result = match topic.as_str() {
@@ -138,7 +137,7 @@ pub async fn mqtt_streams(payload: Vec<u8>, channel_key: &str) -> Result<u32, St
     let sub_id = channel_key; //env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
                               //info!("ENV: {} = {}", ENV_DEVICE_ID, &sub_id);
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
-    info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
+    //info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Decode Payload
     let msg = match enc::Streams::decode(&mut Cursor::new(payload)) {
         Ok(res) => res,
@@ -180,7 +179,7 @@ pub async fn mqtt_streams(payload: Vec<u8>, channel_key: &str) -> Result<u32, St
 pub async fn mqtt_identity(payload: Vec<u8>, channel_id: &str) -> Result<u32, String> {
     info!("--- mqtt_identity() ---");
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
-    info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
+    //info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Connect to Identity Service
     let mut identity_client = connect_identity().await?;
     // Connect to MQTT Service
@@ -199,7 +198,7 @@ pub async fn mqtt_identity(payload: Vec<u8>, channel_id: &str) -> Result<u32, St
     let is_thing = if identity.did.eq(&msg.did) {
         true
     } else {
-        info!("DID Unequal to Gateway DID");
+        info!("DID Unequal to Thing DID");
         false
     };
     // If Thing is requested to proof identity and requested DID is same
@@ -263,21 +262,22 @@ pub fn save_mqtt_sensor_data(
     let data_lst =
         match db::select_sensor_entry_by_time_and_id(&db_client, sensor.id, msg.timestamp) {
             Ok(r) => {
+                if r.is_empty() {
+                    info!("No Entry Found, Making New Data Entry");
+                    make_sensor_data_entry(
+                        &db_client,
+                        sensor.id,
+                        &msg.value,
+                        msg.timestamp,
+                        true,
+                        false,
+                    )?;
+                    return Ok(0);
+                }
                 info!("Found Sensor Data Entry");
                 r
             }
-            Err(_) => {
-                info!("No Entry Found, Making New Data Entry");
-                make_sensor_data_entry(
-                    &db_client,
-                    sensor.id,
-                    &msg.value,
-                    msg.timestamp,
-                    true,
-                    false,
-                )?;
-                return Ok(0);
-            }
+            Err(e) => return Err(format!("Unable to Select Sensor Entries: {}", e)),
         };
     for data in data_lst {
         let id = data.id;
@@ -502,7 +502,7 @@ async fn verify_identity(
 pub async fn mqtt_settings(payload: Vec<u8>) -> Result<u32, String> {
     info!("--- mqtt_settings() ---");
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
-    info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
+    //info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     let msg = match enc::Setting::decode(&mut Cursor::new(payload)) {
         Ok(res) => res,
         Err(e) => return Err(format!("Error Decoding Message: {}", e)),

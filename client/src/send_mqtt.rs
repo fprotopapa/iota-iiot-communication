@@ -15,9 +15,9 @@ use crate::util::{
 pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<String, String> {
     info!("--- send_sensor_data() ---");
     let author_id = env::var(ENV_DEVICE_ID).expect("ENV for Author ID not Found");
-    info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
+    //info!("ENV: {} = {}", ENV_DEVICE_ID, &author_id);
     let thing_key = env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found");
-    info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
+    //info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Connect to Database
     let db_client = db::establish_connection();
     let mut mqtt_client = connect_mqtt().await?;
