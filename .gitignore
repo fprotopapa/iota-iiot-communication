@@ -4,6 +4,7 @@ Dockerfile
 
 *.db
 *.hodl
+*.txt
 /docker/storage/clientfactory/*
 /docker/storage/clientvendor/*
 /docker/storage/gatewaydoc/*
