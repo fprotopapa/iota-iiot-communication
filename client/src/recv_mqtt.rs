@@ -143,7 +143,7 @@ pub async fn mqtt_streams(payload: Vec<u8>, channel_key: &str) -> Result<u32, St
         Ok(res) => res,
         Err(e) => return Err(format!("Unable to Decode Payload: {}", e)),
     };
-
+    info!("Message: {:?}", &msg);
     // Connect to Database
     let db_client = db::establish_connection();
     // Verify that Message wasn't sent from this Thing

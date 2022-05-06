@@ -63,8 +63,13 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
 
     let mut msg_link = match stream_entry.msg_link {
         Some(r) => {
-            info!("IOTA Streams Message Link: {}", &r);
-            r
+            if r.is_empty() {
+                info!("IOTA Streams Message Link: {}", &key_link);
+                key_link
+            } else {
+                info!("IOTA Streams Message Link: {}", &r);
+                r
+            }
         }
         None => {
             info!("IOTA Streams Message Link (use Key Link): {}", &key_link);
