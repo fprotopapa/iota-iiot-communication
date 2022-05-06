@@ -86,6 +86,7 @@ pub async fn mqtt_streams(payload: Vec<u8>) -> Result<u32, String> {
         Ok(res) => res,
         Err(e) => return Err(format!("Unable to Decode Payload: {}", e)),
     };
+    info!("Message: {:?}", &msg);
     // Connect to MQTT Service
     let mut mqtt_client = connect_mqtt().await?;
     // Connect to IOTA Streams Service

@@ -1,5 +1,6 @@
 use serde_json::json;
 use std::env;
+use tokio::time::{sleep, Duration};
 
 use crate::config::{
     ENV_CHANNEL_KEY, ENV_DEVICE_ID, ENV_THING_KEY, TOPIC_SENSOR_VALUE, TOPIC_STREAM,
@@ -32,6 +33,7 @@ pub async fn send_sensor_data() -> Result<String, String> {
     // Get Sensor Entries for Data not Send via MQTT
     let val_mqtt = get_sensor_data(&db_client, "mqtt", false)?;
     for val in val_mqtt {
+        sleep(Duration::from_millis(3000)).await;
         let sensor = get_sensor(&db_client, val.sensor_id)?;
         let sensor_type = get_sensor_type(&db_client, sensor.sensor_types_id)?;
         let payload = serialize_msg(&enc::Sensor {
@@ -98,6 +100,7 @@ pub async fn send_sensor_data() -> Result<String, String> {
         None => "".to_string(),
     };
     for val in val_iota {
+        sleep(Duration::from_millis(3000)).await;
         let sensor = get_sensor(&db_client, val.sensor_id)?;
         let sensor_type = get_sensor_type(&db_client, sensor.sensor_types_id)?;
         let name = match sensor.sensor_name {
