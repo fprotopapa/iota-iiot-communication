@@ -17,7 +17,7 @@ pub const DEFAULT_NODE_URL: &str = "https://chrysalis-nodes.iota.org";
 /// Default value for password to export states
 pub const DEFAULT_STATE_PWD: &str = "123456";
 /// Default value for folder name for saving exported states
-pub const EXPORT_STATE_PATH: &str = "states";
+pub const EXPORT_STATE_PATH: &str = "storage";
 /// Structure used to parse configuration file
 /// Socket needed for GRPC server, for example \[::1]:50051
 #[derive(Debug, Serialize, Deserialize)]

@@ -8,7 +8,7 @@ pub const ENV_STRONGHOLD_PWD: &str = "IDENTITY_STRONGHOLD_PWD";
 /// Default Stronghold Password
 pub const DEFAULT_STRONGHOLD_PWD: &str = "123456";
 /// Folder to hold Stronghold Storage
-pub const STRONGHOLD_FOLDER: &str = "stronghold";
+pub const STRONGHOLD_FOLDER: &str = "storage";
 /// File Name of Stronghold Storage
 pub const STRONGHOLD_FILE: &str = "identity.hodl";
 
