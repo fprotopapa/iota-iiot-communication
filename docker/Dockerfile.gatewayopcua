@@ -36,4 +36,4 @@ ENV NUM_SUBSCRIBER=1
 
 RUN ["chmod", "+x", "./start.sh"]
 
-# ENTRYPOINT ["./start.sh"]
+ENTRYPOINT ["./start.sh"]

@@ -33,4 +33,4 @@ ENV LATEST_TIMESTAMP=0
 
 RUN ["chmod", "+x", "./start.sh"]
 
-#ENTRYPOINT ["./start.sh"]
+ENTRYPOINT ["./start.sh"]

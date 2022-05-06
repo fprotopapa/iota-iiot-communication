@@ -33,4 +33,4 @@ ENV SENSOR_IDS=""
 
 RUN ["chmod", "+x", "./start.sh"]
 
-#ENTRYPOINT ["./start.sh"]
+ENTRYPOINT ["./start.sh"]
