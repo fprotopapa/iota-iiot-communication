@@ -1,0 +1,30 @@
+[grpc]
+socket = '0.0.0.0:50054'
+
+[mqtt]
+tls = true
+port = 8883
+ca_name = 'ca.crt'
+mqtt_v5 = false
+recon_intv = [
+    2,
+    20,
+]
+keep_alive = 20
+timeout = 5
+clean_session = false
+qos_pub = 1
+qos = [
+    1,
+    1,
+    1,
+    1,
+    1,
+]
+topics = [
+    'did',
+    'identity',
+    'stream',
+    'settings',
+    'command',
+]
