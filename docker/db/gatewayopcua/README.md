@@ -1,1 +1,0 @@
-# Persistent DB for Gateway (OPC-UA)

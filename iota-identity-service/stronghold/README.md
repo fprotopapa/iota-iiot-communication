@@ -1,2 +1,0 @@
-# Store Stronghold Storage
-
