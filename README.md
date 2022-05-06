@@ -45,5 +45,10 @@ docker run --env-file docker/.env_gatewaydoc -v $(pwd)/docker/storage/gatewaydoc
 
 Log: 
 
-docker logs containername >& logs/myFile.log
-docker logs -f <yourContainer> &> your.log &
+docker run --env-file docker/.env_gatewaymock -v $(pwd)/docker/storage/gatewaymock:/gateway_mock/storage gateway_mock >& gateway_mock.txt & 
+docker run --env-file docker/.env_clientfactory -v $(pwd)/docker/storage/clientfactory:/client_factory/storage client_factory >& client_factory.txt & 
+docker run --env-file docker/.env_clientvendor -v $(pwd)/docker/storage/clientvendor:/client_vendor/storage client_vendor >& client_vendor.txt & 
+docker run --env-file docker/.env_gatewayopcua -v $(pwd)/docker/storage/gatewayopcua:/gateway_opcua/storage gateway_opcua >& gateway_opcua.txt & 
+docker run --env-file docker/.env_gatewaydoc -v $(pwd)/docker/storage/gatewaydoc:/gateway_doc/storage gateway_doc >& gateway_doc.txt & 
+
+docker kill $(docker ps -q)
