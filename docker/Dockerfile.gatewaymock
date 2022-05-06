@@ -3,13 +3,14 @@ FROM ubuntu:20.04
 
 WORKDIR /gateway_mock
 
-COPY ./rust-mqtt-service/target/debug/mqtt-server .
-COPY ./iota-identity-service/target/debug/iota-identity-server .
-COPY ./iota-streams-service/target/debug/iota-streams-server .
-COPY ./gateway/target/debug/gateway .
-COPY ./rust-sensors/mock/target/debug/mock-client .
+COPY ./rust-mqtt-service/target/release/mqtt-server .
+COPY ./iota-identity-service/target/release/iota-identity-server .
+COPY ./iota-streams-service/target/release/iota-streams-server .
+COPY ./gateway/target/release/gateway .
+COPY ./rust-sensors/mock/target/release/mock-client .
 COPY ./docker/gateway_mock.sh ./start.sh
 COPY ./docker/gateway-grpc_startup_mock.toml ./config/gateway-grpc.toml
+COPY ./docker/mqtt-grpc_gateway.toml ./config/mqtt-grpc.toml
 COPY ./docker/ca.crt ./cert/ca.crt
 
 RUN mkdir ./storage

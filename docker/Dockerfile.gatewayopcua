@@ -3,16 +3,17 @@ FROM ubuntu:20.04
 
 WORKDIR /gateway_opcua
 
-COPY ./rust-mqtt-service/target/debug/mqtt-server .
-COPY ./iota-identity-service/target/debug/iota-identity-server .
-COPY ./iota-streams-service/target/debug/iota-streams-server .
-COPY ./gateway/target/debug/gateway .
-COPY ./rust-sensors/opc-ua/target/debug/opcua-client .
-COPY ./rust-sensors/opc-ua/target/debug/opcua-server .
+COPY ./rust-mqtt-service/target/release/mqtt-server .
+COPY ./iota-identity-service/target/release/iota-identity-server .
+COPY ./iota-streams-service/target/release/iota-streams-server .
+COPY ./gateway/target/release/gateway .
+COPY ./rust-sensors/opc-ua/target/release/opcua-client .
+COPY ./rust-sensors/opc-ua/target/release/opcua-server .
 COPY ./rust-sensors/opc-ua/opcua-config/client.conf ./opcua-config/client.conf
 COPY ./rust-sensors/opc-ua/opcua-config/server.conf ./opcua-config/server.conf
 COPY ./docker/gateway_opcua.sh ./start.sh
 COPY ./docker/gateway-grpc_startup_opcua.toml ./config/gateway-grpc.toml
+COPY ./docker/mqtt-grpc_gateway.toml ./config/mqtt-grpc.toml
 COPY ./docker/ca.crt ./cert/ca.crt
 
 RUN mkdir ./storage
