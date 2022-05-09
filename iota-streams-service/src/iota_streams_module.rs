@@ -27,13 +27,12 @@ pub mod streams_author {
         app_channels::Tangle,
         core_edsig::signature::ed25519::PublicKey,
     };
-    use tokio::time::{sleep, Duration};
 
     pub async fn create_new_author(id: &str) -> Result<String, String> {
         let client = make_client().await?;
         info!("Create New Channel Through Announcement");
         let mut author = make_author(client);
-        let ann_link = make_announcement(&mut author).await;
+        let ann_link = make_announcement(&mut author).await?;
         export_state(&mut author, id).await?;
         Ok(ann_link.to_string())
     }
@@ -45,7 +44,7 @@ pub mod streams_author {
             "Add Subscriber with Subscription Link: {}",
             subscription_link
         );
-        receive_subscription(&mut author, &sub_link).await;
+        receive_subscription(&mut author, &sub_link).await?;
         export_state(&mut author, id).await?;
         Ok("Subscriber Succesfully Added".to_string())
     }
@@ -56,7 +55,7 @@ pub mod streams_author {
             Some(address) => address,
             None => return Err("No Announcement Link Found".to_string()),
         };
-        let (keyload_link, _) = make_keyload(&mut author, &announcement_link).await;
+        let (keyload_link, _) = make_keyload(&mut author, &announcement_link).await?;
         export_state(&mut author, id).await?;
         Ok(keyload_link.to_string())
     }
@@ -113,55 +112,49 @@ pub mod streams_author {
         author
     }
 
-    pub async fn make_announcement(author: &mut Author<Tangle>) -> Address {
-        loop {
-            match author.send_announce().await {
-                Ok(link) => {
-                    info!("Announcement Link: {}", &link.to_string());
-                    return link;
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    sleep(Duration::from_millis(10000)).await;
-                    continue;
-                }
-            };
-        }
+    pub async fn make_announcement(author: &mut Author<Tangle>) -> Result<Address, String> {
+        match author.send_announce().await {
+            Ok(link) => {
+                info!("Announcement Link: {}", &link.to_string());
+                return Ok(link);
+            }
+            Err(e) => {
+                error!("{}", e);
+                return Err(format!("Unable to Make Announcement: {}", e));
+            }
+        };
     }
 
     pub async fn make_keyload(
         author: &mut Author<Tangle>,
         announcement_link: &Address,
-    ) -> (TangleAddress, Option<TangleAddress>) {
-        loop {
-            match author.send_keyload_for_everyone(announcement_link).await {
-                Ok(link) => {
-                    info!("Keyload Link: {}", &link.0.to_string());
-                    return link;
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    sleep(Duration::from_millis(10000)).await;
-                    continue;
-                }
-            };
-        }
+    ) -> Result<(TangleAddress, Option<TangleAddress>), String> {
+        match author.send_keyload_for_everyone(announcement_link).await {
+            Ok(link) => {
+                info!("Keyload Link: {}", &link.0.to_string());
+                return Ok(link);
+            }
+            Err(e) => {
+                error!("{}", e);
+                return Err(format!("Unable to Make Keyload: {}", e));
+            }
+        };
     }
 
-    pub async fn receive_subscription(author: &mut Author<Tangle>, subscription_link: &Address) {
-        loop {
-            match author.receive_subscribe(subscription_link).await {
-                Ok(_) => {
-                    info!("Author Received Subscription");
-                    return ();
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    sleep(Duration::from_millis(10000)).await;
-                    continue;
-                }
-            };
-        }
+    pub async fn receive_subscription(
+        author: &mut Author<Tangle>,
+        subscription_link: &Address,
+    ) -> Result<(), String> {
+        match author.receive_subscribe(subscription_link).await {
+            Ok(_) => {
+                info!("Author Received Subscription");
+                return Ok(());
+            }
+            Err(e) => {
+                error!("{}", e);
+                return Err(format!("Unable to Receive Subscription: {}", e));
+            }
+        };
     }
 
     pub async fn export_state(caller: &mut Author<Tangle>, id: &str) -> Result<(), String> {
@@ -226,8 +219,6 @@ pub mod streams_subscriber {
         app_channels::api::tangle::{Address, Bytes, Subscriber},
         app_channels::Tangle,
     };
-    use tokio::time::{sleep, Duration};
-    // Todo get PK
     pub async fn create_new_subscriber(
         id: &str,
         announcement_link: &str,
@@ -235,8 +226,8 @@ pub mod streams_subscriber {
         let client = make_client().await?;
         let mut subscriber = make_subscriber(client);
         let ann_link = parse_address(announcement_link)?;
-        receive_announcement(&mut subscriber, &ann_link).await;
-        let subscription_link = make_subscription(&mut subscriber, &ann_link).await;
+        receive_announcement(&mut subscriber, &ann_link).await?;
+        let subscription_link = make_subscription(&mut subscriber, &ann_link).await?;
         export_state(&mut subscriber, id).await?;
         Ok(subscription_link.to_string())
     }
@@ -287,39 +278,33 @@ pub mod streams_subscriber {
     pub async fn receive_announcement(
         subscriber: &mut Subscriber<Tangle>,
         announcement_link: &Address,
-    ) {
-        loop {
-            match subscriber.receive_announcement(announcement_link).await {
-                Ok(_r) => {
-                    info!("Subscriber Received Announcement Link");
-                    return ();
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    sleep(Duration::from_millis(10000)).await;
-                    continue;
-                }
-            };
-        }
+    ) -> Result<(), String> {
+        match subscriber.receive_announcement(announcement_link).await {
+            Ok(_r) => {
+                info!("Subscriber Received Announcement Link");
+                return Ok(());
+            }
+            Err(e) => {
+                error!("{}", e);
+                return Err(format!("Unable to Receive Announcement: {}", e));
+            }
+        };
     }
 
     pub async fn make_subscription(
         subscriber: &mut Subscriber<Tangle>,
         announcement_link: &Address,
-    ) -> Address {
-        loop {
-            match subscriber.send_subscribe(announcement_link).await {
-                Ok(link) => {
-                    info!("Subscription Link: {}", &link.to_string());
-                    return link;
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    sleep(Duration::from_millis(10000)).await;
-                    continue;
-                }
-            };
-        }
+    ) -> Result<Address, String> {
+        match subscriber.send_subscribe(announcement_link).await {
+            Ok(link) => {
+                info!("Subscription Link: {}", &link.to_string());
+                return Ok(link);
+            }
+            Err(e) => {
+                error!("{}", e);
+                return Err(format!("Unable to Make Subscription: {}", e));
+            }
+        };
     }
 
     pub async fn export_state(caller: &mut Subscriber<Tangle>, id: &str) -> Result<(), String> {
