@@ -55,21 +55,15 @@ pub async fn receive_mqtt_messages(channel_key: &str, postfix: i32) -> Result<St
             Err(e) => error!("{}", e),
         }
     }
+    iota_sensor_data(channel_key).await?;
     Ok("Exit with Success: receive_mqtt_messages()".to_string())
 }
 
-pub async fn mqtt_save_sensor_data(payload: Vec<u8>, channel_key: &str) -> Result<u32, String> {
-    info!("--- mqtt_save_sensor_data() ---");
+pub async fn iota_sensor_data(channel_key: &str) -> Result<u32, String> {
+    let mut streams_client = connect_streams().await?;
     let mut mqtt_client = connect_mqtt().await?;
-    // Decode Payload
-    let msg = match enc::Sensor::decode(&mut Cursor::new(payload)) {
-        Ok(res) => res,
-        Err(e) => return Err(format!("Unable to Decode Payload: {}", e)),
-    };
     let db_client = db::establish_connection();
     let channel = get_channel(&db_client, channel_key)?;
-    save_mqtt_sensor_data(&db_client, channel.id, msg)?;
-    let mut streams_client = connect_streams().await?;
     let stream_entry = get_streams(&db_client, channel.id)?;
     let sub_link = match stream_entry.sub_link {
         Some(r) => r,
@@ -102,6 +96,21 @@ pub async fn mqtt_save_sensor_data(payload: Vec<u8>, channel_key: &str) -> Resul
     for msg in msgs.messages {
         save_iota_sensor_data(&db_client, &msg, channel.id).await?;
     }
+
+    Ok(0)
+}
+
+pub async fn mqtt_save_sensor_data(payload: Vec<u8>, channel_key: &str) -> Result<u32, String> {
+    info!("--- mqtt_save_sensor_data() ---");
+    // Decode Payload
+    let msg = match enc::Sensor::decode(&mut Cursor::new(payload)) {
+        Ok(res) => res,
+        Err(e) => return Err(format!("Unable to Decode Payload: {}", e)),
+    };
+    let db_client = db::establish_connection();
+    let channel = get_channel(&db_client, channel_key)?;
+    save_mqtt_sensor_data(&db_client, channel.id, msg)?;
+
     Ok(0)
 }
 

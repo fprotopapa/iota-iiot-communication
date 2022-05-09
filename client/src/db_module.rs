@@ -100,6 +100,27 @@ pub fn select_sensor_entry_for_tangle(
     };
     Ok(result)
 }
+/// Select Verified Sensor Entry by sensor ID
+pub fn select_verified_sensor_entry_for_tangle(
+    conn: &SqliteConnection,
+    sensor_identifier: i32,
+) -> Result<Vec<models::SensorData>, i32> {
+    use self::sensor_data::dsl::*;
+    let query = sensor_data
+        .filter(sensor_id.eq(sensor_identifier))
+        .filter(iota.eq(false))
+        .filter(verified.eq(true))
+        .limit(5)
+        .get_results::<models::SensorData>(conn);
+    let result = match query {
+        Ok(r) => r,
+        Err(e) => {
+            error!("{}", e);
+            return Err(-1);
+        }
+    };
+    Ok(result)
+}
 /// Select Sensor Entry
 pub fn select_sensor_entry(
     conn: &SqliteConnection,

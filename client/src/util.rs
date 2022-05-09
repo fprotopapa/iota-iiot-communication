@@ -124,6 +124,7 @@ pub fn generate_random_sequence() -> String {
     rand_string
 }
 
+#[allow(dead_code)]
 pub fn parse_env<T>(env_var_name: &str) -> T
 where
     T: FromStr,

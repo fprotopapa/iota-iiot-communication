@@ -2,13 +2,13 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use serde_json::json;
 use std::env;
 
-use crate::config::{ENV_DEVICE_ID, ENV_LATEST_TIMESTAMP, ENV_THING_KEY};
+use crate::config::{ENV_DEVICE_ID, ENV_THING_KEY};
 use crate::db_module as db;
 use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
 use crate::grpc_streams::{IotaStreamsReply, IotaStreamsSendMessageRequest};
 use crate::models::{Sensor, SensorType, Stream};
 use crate::util::{
-    connect_streams, get_channel, get_identification, get_thing, parse_env, update_streams_entry,
+    connect_streams, get_channel, get_identification, get_thing, update_streams_entry,
 };
 
 pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<String, String> {
@@ -27,8 +27,8 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
     // Connect to IOTA Streams Service
     let mut stream_client = connect_streams().await?;
     // Get Latest Timestamp
-    let timestamp = parse_env::<i64>(ENV_LATEST_TIMESTAMP);
-    let db_entries = match db::select_sensor_entry_for_tangle(&db_client, sensor.id, timestamp) {
+    //let timestamp = parse_env::<i64>(ENV_LATEST_TIMESTAMP);
+    let db_entries = match db::select_verified_sensor_entry_for_tangle(&db_client, sensor.id) {
         Ok(r) => r,
         Err(_) => return Err("Unable to Select Sensor Entries".to_string()),
     };
@@ -40,24 +40,6 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
     let channel = get_channel(&db_client, channel_key)?;
     // Get Message Link
     let stream_entry = get_streams(&db_client, channel.id)?;
-    // let sub_link = match stream_entry.sub_link {
-    //     Some(r) => r,
-    //     None => "".to_string(),
-    // };
-    // Check if Keyloads are sent,
-    // let key_link = match stream_entry.key_link {
-    //     Some(r) => {
-    //         if r.is_empty() {
-    //             //send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
-    //             return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
-    //         }
-    //         r
-    //     }
-    //     None => {
-    //         //send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
-    //         return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
-    //     }
-    // };
     // Get Thing ID
     let thing = get_thing(&db_client, &thing_key)?;
     // Get own DID
@@ -95,12 +77,14 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
         // Send IOTA Streams Message
         let response =
             send_message_to_tangle(&mut stream_client, &msg_link, &payload, &author_id).await?;
-        update_streams_entry(&db_client, &response.link, 0, "msg_link", channel.id)?;
-        env::set_var(ENV_LATEST_TIMESTAMP, val.sensor_time.to_string());
-        //info!("Saved in ENV: {}", ENV_LATEST_TIMESTAMP);
-        msg_link = response.link;
-        // Update DB Entry
-        let _ = db::update_sensor_entry(&db_client, val.id, "iota", true);
+        if response.link.is_empty() {
+            error!("Error: Received Message Link Empty");
+        } else {
+            update_streams_entry(&db_client, &response.link, 0, "msg_link", channel.id)?;
+            msg_link = response.link;
+            // Update DB Entry
+            let _ = db::update_sensor_entry(&db_client, val.id, "iota", true);
+        }
     }
     info!(
         "Channel Key: {}, Channel ID: {}, Sensor ID: {}, Thing Key: {}, Stream Entry ID: {}",
@@ -110,9 +94,7 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
 }
 
 fn unix_to_utc(timestamp: i64) -> DateTime<Utc> {
-    let naive =
-        NaiveDateTime::from_timestamp_opt(timestamp / 1000, (timestamp % 1000) as u32 * 1_000_000)
-            .unwrap();
+    let naive = NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap();
     DateTime::<Utc>::from_utc(naive, Utc)
 }
 

@@ -24,6 +24,7 @@ pub const ENV_DEVICE_ID: &str = "DEVICE_ID";
 pub const ENV_CHANNELS_KEY: &str = "CHANNEL_IDS"; // Seperated with ';'
 pub const ENV_THING_KEY: &str = "THING_NAME";
 pub const ENV_THING_PWD: &str = "THING_PWD";
+#[allow(dead_code)]
 pub const ENV_LATEST_TIMESTAMP: &str = "LATEST_TIMESTAMP";
 pub const ENV_SENSOR_KEYS: &str = "SENSOR_IDS"; // Seperated with ';'
 /// ENV for GRPC Socket
