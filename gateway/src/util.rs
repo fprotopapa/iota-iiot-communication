@@ -52,6 +52,7 @@ pub async fn send_mqtt_message(
     let _response = match client
         .send_mqtt_message(tonic::Request::new(MqttRequest {
             id: env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found"),
+            postfix: "pub".to_string(),
             pwd: env::var(ENV_THING_PWD).expect("ENV for Thing PWD not Found"),
             channel: env::var(ENV_CHANNEL_KEY).expect("ENV for Channel Key not Found"),
             topic: topic.to_string(),
