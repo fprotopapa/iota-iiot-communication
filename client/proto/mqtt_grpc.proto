@@ -11,10 +11,11 @@ service MqttOperator {
 message MqttRequest {
     // Request Message for MQTT Service
     string id = 1;
-    string pwd = 2;
-    string channel = 3;
-    string topic = 4;
-    bytes message = 5;
+    string postfix = 2;
+    string pwd = 3;
+    string channel = 4;
+    string topic = 5;
+    bytes message = 6;
 }
 
 message MqttReply {

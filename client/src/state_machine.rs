@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use crate::config::PUBLIC_CHANNEL_ID;
 use crate::recv_mqtt::receive_mqtt_messages;
 use crate::req_verification::request_identity_verification;
 use crate::send_mqtt::send_sensor_data;
@@ -16,12 +17,13 @@ pub async fn state_machine() -> Result<(), Box<dyn std::error::Error>> {
         Vec::new()
     };
     loop {
+        let mut postfix = 0;
         for channel_id in channel_ids.clone() {
-            let (rx, tx, id) = join!(
+            info!("State Machine: Channel Key: {}", channel_id);
+            postfix += 1;
+            let (rx, id) = join!(
                 // Check for new MQTT Messages
-                receive_mqtt_messages(&channel_id),
-                // Publish Verified Data to Public Stream
-                publish_data(is_factory, &sensor_ids, &channel_id),
+                receive_mqtt_messages(&channel_id, postfix),
                 // Check for Unverified Identities
                 request_identity_verification(&channel_id)
             );
@@ -29,17 +31,18 @@ pub async fn state_machine() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(r) => info!("{}", r),
                 Err(e) => error!("{}", e),
             }
-            match tx {
-                Ok(r) => info!("{}", r),
-                Err(e) => error!("{}", e),
-            }
             match id {
                 Ok(r) => info!("{}", r),
                 Err(e) => error!("{}", e),
             }
-            // Wait ...
-            sleep(Duration::from_millis(10000)).await;
         }
+        // Publish Verified Data to Public Stream
+        match publish_data(is_factory, &sensor_ids, PUBLIC_CHANNEL_ID).await {
+            Ok(r) => info!("{}", r),
+            Err(e) => error!("{}", e),
+        }
+        // Wait ...
+        sleep(Duration::from_millis(10000)).await;
     }
 }
 
@@ -50,6 +53,10 @@ async fn publish_data(
 ) -> Result<String, String> {
     if is_factory {
         for sensor_id in sensor_ids {
+            info!(
+                "Publish Data: Channel Key: {}, Sensor ID: {}",
+                channel_id, sensor_id
+            );
             // Publish Verified Data to Public Stream
             match send_sensor_data(channel_id, sensor_id).await {
                 Ok(r) => info!("{}", r),

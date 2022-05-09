@@ -8,8 +8,7 @@ use crate::grpc_streams::iota_streamer_client::IotaStreamerClient;
 use crate::grpc_streams::{IotaStreamsReply, IotaStreamsSendMessageRequest};
 use crate::models::{Sensor, SensorType, Stream};
 use crate::util::{
-    connect_mqtt, connect_streams, get_channel, get_identification, get_thing, parse_env,
-    send_sublink, update_streams_entry,
+    connect_streams, get_channel, get_identification, get_thing, parse_env, update_streams_entry,
 };
 
 pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<String, String> {
@@ -20,7 +19,7 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
     //info!("ENV: {} = {}", ENV_THING_KEY, &thing_key);
     // Connect to Database
     let db_client = db::establish_connection();
-    let mut mqtt_client = connect_mqtt().await?;
+    // let mut mqtt_client = connect_mqtt().await?;
     let sensor = match db::select_sensor_by_name(&db_client, sensor_id) {
         Ok(r) => r,
         Err(e) => return Err(format!("Sensor Not Found: {}", e)),
@@ -33,29 +32,32 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
         Ok(r) => r,
         Err(_) => return Err("Unable to Select Sensor Entries".to_string()),
     };
+    if db_entries.is_empty() {
+        return Ok("No Data to Make Public".to_string());
+    }
     // Send Data to Tangle
     // Get Channel ID
     let channel = get_channel(&db_client, channel_key)?;
     // Get Message Link
     let stream_entry = get_streams(&db_client, channel.id)?;
-    let sub_link = match stream_entry.sub_link {
-        Some(r) => r,
-        None => "".to_string(),
-    };
+    // let sub_link = match stream_entry.sub_link {
+    //     Some(r) => r,
+    //     None => "".to_string(),
+    // };
     // Check if Keyloads are sent,
-    let key_link = match stream_entry.key_link {
-        Some(r) => {
-            if r.is_empty() {
-                send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
-                return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
-            }
-            r
-        }
-        None => {
-            send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
-            return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
-        }
-    };
+    // let key_link = match stream_entry.key_link {
+    //     Some(r) => {
+    //         if r.is_empty() {
+    //             //send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
+    //             return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
+    //         }
+    //         r
+    //     }
+    //     None => {
+    //         //send_sublink(&mut mqtt_client, &db_client, &sub_link, channel_key).await?;
+    //         return Ok("No IOTA Streams Connection Established (Keyload Missing)".to_string());
+    //     }
+    // };
     // Get Thing ID
     let thing = get_thing(&db_client, &thing_key)?;
     // Get own DID
@@ -64,16 +66,14 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
     let mut msg_link = match stream_entry.msg_link {
         Some(r) => {
             if r.is_empty() {
-                info!("IOTA Streams Message Link: {}", &key_link);
-                key_link
+                return Ok("No Public IOTA Streams Connection Established".to_string());
             } else {
                 info!("IOTA Streams Message Link: {}", &r);
                 r
             }
         }
         None => {
-            info!("IOTA Streams Message Link (use Key Link): {}", &key_link);
-            key_link
+            return Ok("No Public IOTA Streams Connection Established".to_string());
         }
     };
     for val in db_entries {
@@ -99,7 +99,13 @@ pub async fn send_sensor_data(channel_key: &str, sensor_id: &str) -> Result<Stri
         env::set_var(ENV_LATEST_TIMESTAMP, val.sensor_time.to_string());
         //info!("Saved in ENV: {}", ENV_LATEST_TIMESTAMP);
         msg_link = response.link;
+        // Update DB Entry
+        let _ = db::update_sensor_entry(&db_client, val.id, "iota", true);
     }
+    info!(
+        "Channel Key: {}, Channel ID: {}, Sensor ID: {}, Thing Key: {}, Stream Entry ID: {}",
+        channel_key, channel.id, sensor_id, thing_key, stream_entry.id
+    );
     Ok("Exit with Success: send_sensor_data()".to_string())
 }
 

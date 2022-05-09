@@ -353,7 +353,7 @@ pub async fn init_streams(
                     ann_link: author.link.clone(),
                     sub_link: "".to_string(),
                     key_link: "".to_string(),
-                    msg_link: "".to_string(),
+                    msg_link: author.link.clone(),
                 },
             ) {
                 Ok(_) => info!("Streams Entry Created for Channel ID: {}", channel_id),

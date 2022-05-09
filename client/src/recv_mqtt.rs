@@ -36,10 +36,10 @@ struct MessageFromJson {
     timestamp: i64,
 }
 
-pub async fn receive_mqtt_messages(channel_key: &str) -> Result<String, String> {
+pub async fn receive_mqtt_messages(channel_key: &str, postfix: i32) -> Result<String, String> {
     info!("--- receive_mqtt_messages() ---");
     let mut mqtt_client = connect_mqtt().await?;
-    let mut response = receive_messages(&mut mqtt_client, channel_key).await?;
+    let mut response = receive_messages(&mut mqtt_client, channel_key, postfix).await?;
     for (payload, topic) in response.messages.iter_mut().zip(response.topics) {
         let result = match topic.as_str() {
             TOPIC_DID => mqtt_identity(payload.to_vec(), channel_key).await,
@@ -572,6 +572,10 @@ pub async fn add_keyload(
     };
     // Save Sub Link
     let channel = get_channel(&db_client, &channel_key)?;
+    info!(
+        "Channel Key: {}, Channel ID: {}, Stream Entry ID: {}",
+        channel_key, channel.id, stream_entry.id
+    );
     update_streams_entry(db_client, key_link, 0, "keyload", channel.id)?;
     Ok(0)
 }
@@ -588,8 +592,15 @@ pub async fn make_subscriber(
     // Connect to IOTA Streams Service
     let mut stream_client = connect_streams().await?;
     let channel = get_channel(&db_client, &channel_key)?;
+    info!(
+        "Channel Key: {}, Channel ID: {}, Thing Key: {}",
+        channel_key, channel.id, thing_key
+    );
     match get_streams(&db_client, channel.id) {
-        Ok(_) => return Ok(0),
+        Ok(r) => {
+            info!("Stream Entry ID: {}", r.id);
+            return Ok(0);
+        }
         Err(_) => {
             match db::create_stream(
                 db_client,
@@ -718,10 +729,12 @@ fn update_identity_unverifiable(
 async fn receive_messages(
     mqtt_client: &mut MqttOperatorClient<tonic::transport::Channel>,
     channel_key: &str,
+    postfix: i32,
 ) -> Result<MqttMsgsReply, String> {
     let response = match mqtt_client
         .receive_mqtt_message(tonic::Request::new(MqttRequest {
             id: env::var(ENV_THING_KEY).expect("ENV for Thing Key not Found"),
+            postfix: postfix.to_string(),
             pwd: env::var(ENV_THING_PWD).expect("ENV for Thing PWD not Found"),
             channel: channel_key.to_string(),
             topic: "".to_string(),
