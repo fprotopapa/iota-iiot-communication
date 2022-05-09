@@ -52,3 +52,6 @@ docker run --env-file docker/.env_gatewayopcua -v $(pwd)/docker/storage/gatewayo
 docker run --env-file docker/.env_gatewaydoc -v $(pwd)/docker/storage/gatewaydoc:/gateway_doc/storage gateway_doc >& gateway_doc.txt & 
 
 docker kill $(docker ps -q)
+
+
+RUST_LOG=info ./target/release/public_channel
