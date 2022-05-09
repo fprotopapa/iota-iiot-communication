@@ -27,6 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let payload: Vec<u8> = "Hello World".as_bytes().to_vec();
     let msg = MqttRequest {
         id: id_pub.to_string(),
+        postfix: "sub".to_string(),
         pwd: pwd_pub.to_string(),
         channel: channel_id.to_string(),
         topic: "did".to_string(),
@@ -40,6 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let payload: Vec<u8> = "Important Settings".as_bytes().to_vec();
     let msg = MqttRequest {
         id: id_pub.to_string(),
+        postfix: "sub".to_string(),
         pwd: pwd_pub.to_string(),
         channel: channel_id.to_string(),
         topic: "settings".to_string(),
@@ -51,6 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("---------------------------------");
     let msg = MqttRequest {
         id: id_sub.to_string(),
+        postfix: "sub".to_string(),
         pwd: pwd_sub.to_string(),
         channel: channel_id.to_string(),
         topic: "".to_string(), //"did".to_string(),

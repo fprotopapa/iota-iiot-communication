@@ -19,6 +19,7 @@ pub struct MqttHandler {
 /// Struct to Hold Message Information
 pub struct MessageHandler<'a> {
     pub id: &'a String,
+    pub postfix: &'a String,
     pub pwd: &'a String,
     pub channel: &'a String,
     pub topic: &'a String,
@@ -31,7 +32,7 @@ pub async fn send_grpc_message<'a>(
 ) -> Result<String, String> {
     info!("--- send_grpc_message() ---");
     // Make Client
-    let client_opt = create_client_option_wo_id(&cfg.handler.host); // create_client_option(&cfg.handler.host, msg.id, "pub"); 
+    let client_opt = create_client_option_wo_id(&cfg.handler.host); // create_client_option(&cfg.handler.host, msg.id, "pub");
     let client = create_client(client_opt)?;
     let conn_opt = create_conn_option(cfg, msg.id, msg.pwd, true);
     connect_to_broker(&client, conn_opt).await?;
@@ -50,7 +51,7 @@ pub async fn receive_grpc_messages<'a>(
 ) -> Result<(Vec<String>, Vec<Vec<u8>>), String> {
     info!("--- receive_grpc_message() ---");
     // Make Client
-    let client_opt = create_client_option(&cfg.handler.host, msg.id, "sub");
+    let client_opt = create_client_option(&cfg.handler.host, msg.id, msg.postfix);
     let mut client = create_client(client_opt)?;
     let conn_opt = create_conn_option(cfg, msg.id, msg.pwd, false);
 
@@ -131,7 +132,10 @@ fn make_topic_address(channel_id: &str, topic: &str) -> String {
     format!("channels/{}/messages/{}", channel_id, topic)
 }
 /// Establish Connection to Broker
-pub async fn connect_to_broker(client: &paho_mqtt::AsyncClient, conn_opt: mqtt::ConnectOptions) -> Result<(), String> {
+pub async fn connect_to_broker(
+    client: &paho_mqtt::AsyncClient,
+    conn_opt: mqtt::ConnectOptions,
+) -> Result<(), String> {
     match client.connect(conn_opt.clone()).await {
         Ok(_) => return Ok(()),
         Err(e) => return Err(e.to_string()),
@@ -203,12 +207,13 @@ pub async fn init_controller() -> MqttHandler {
     let mqtt_host = create_broker_address(url.clone(), cfg.mqtt.port.to_string(), cfg.mqtt.tls);
     info!("MQTT Server Address: {}", &mqtt_host);
     // TLS Options
-    let ca_cert = env::current_dir()
-        .unwrap()
-        .join("cert")
-        .join(cfg.mqtt.ca_name);
+    // let ca_cert = env::current_dir()
+    //     .unwrap()
+    //     .join("cert")
+    //     .join(cfg.mqtt.ca_name);
     let tls_opt = mqtt::SslOptionsBuilder::new()
-        .trust_store(ca_cert.clone())
+        .ca_path("/etc/ssl/certs/")
+        //.trust_store(ca_cert.clone())
         .unwrap()
         .finalize();
     // MQTT Version

@@ -38,6 +38,7 @@ impl MqttOperator for MqttOperatorService {
             &self,
             &MessageHandler {
                 id: &request.id,
+                postfix: &request.postfix,
                 pwd: &request.pwd,
                 channel: &request.channel,
                 topic: &request.topic,
@@ -68,6 +69,7 @@ impl MqttOperator for MqttOperatorService {
             &self,
             &MessageHandler {
                 id: &request.id,
+                postfix: &request.postfix,
                 pwd: &request.pwd,
                 channel: &request.channel,
                 topic: &request.topic,
