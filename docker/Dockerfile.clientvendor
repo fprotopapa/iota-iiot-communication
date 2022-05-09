@@ -8,14 +8,13 @@ COPY ./iota-identity-service/target/release/iota-identity-server .
 COPY ./iota-streams-service/target/release/iota-streams-server .
 COPY ./client/target/release/client .
 COPY ./docker/client.sh ./start.sh
-COPY ./docker/ca.crt ./cert/ca.crt
 
 RUN mkdir ./storage
 RUN echo "DATABASE_URL=file:storage/database.db" > .env 
 
-# RUN apt-get update && apt-get install -y \
-#     lsof \
-#     nano
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates 
 
 # Device
 ENV DEVICE_NAME=ClientVendor

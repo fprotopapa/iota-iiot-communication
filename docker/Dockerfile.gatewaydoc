@@ -11,14 +11,13 @@ COPY ./rust-sensors/send_doc/target/release/doc-client .
 COPY ./docker/gateway_doc.sh ./start.sh
 COPY ./docker/gateway-grpc_startup_doc.toml ./config/gateway-grpc.toml
 COPY ./docker/mqtt-grpc_gateway.toml ./config/mqtt-grpc.toml
-COPY ./docker/ca.crt ./cert/ca.crt
 
 RUN mkdir ./storage
 RUN echo "DATABASE_URL=file:storage/database.db" > .env 
 
-# RUN apt-get update && apt-get install -y \
-#     lsof \
-#     nano 
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates 
 
 # Device
 ENV DEVICE_NAME=GatewayDoc
