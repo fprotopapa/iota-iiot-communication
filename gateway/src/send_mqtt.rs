@@ -127,9 +127,13 @@ pub async fn send_sensor_data() -> Result<String, String> {
         // Send IOTA Streams Message
         let response =
             send_message_to_tangle(&mut stream_client, &msg_link, &payload, &author_id).await?;
-        update_streams_entry(&db_client, &response.link, 0, "msg_link", channel.id)?;
-        update_sensor_entry(&db_client, val.id, "iota", true)?;
-        msg_link = response.link;
+        if response.link.is_empty() {
+            error!("Error: Received Message Link Empty");
+        } else {
+            update_streams_entry(&db_client, &response.link, 0, "msg_link", channel.id)?;
+            update_sensor_entry(&db_client, val.id, "iota", true)?;
+            msg_link = response.link;
+        }
     }
     Ok("Exit with Success: send_sensor_data()".to_string())
 }
