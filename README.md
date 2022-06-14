@@ -2,6 +2,8 @@
 
 ## Description
 
+IIoT system using MQTT, IOTA Streams, and Identity. 
+
 ![overview](concept_general.png)
 
 ![overview](concept_channel.png)
